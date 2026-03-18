@@ -1,0 +1,7 @@
+** BUILD FAILED **
+
+
+The following build commands failed:
+	CompileC /Users/jaronk/Library/Developer/Xcode/DerivedData/PredictSpinz-cyfqjgwhgdvygvcvxrkcwlxmrpaw/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/React-runtimescheduler.build/Objects-normal/arm64/RuntimeScheduler_Legacy.o /Users/jaronk/PredictSpinz/mobile/node_modules/react-native/ReactCommon/react/renderer/runtimescheduler/RuntimeScheduler_Legacy.cpp normal arm64 c++ com.apple.compilers.llvm.clang.1_0.compiler (in target 'React-runtimescheduler' from project 'Pods')
+	Building workspace PredictSpinz with scheme PredictSpinz and configuration Debug
+(2 failures)
