@@ -2,58 +2,45 @@ import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '../../lib/colors';
+import { PREDICTION_QUESTIONS, getCategories } from '../../lib/prediction-questions';
 
-// Mock data for demonstration
-const MOCK_MARKETS = [
-  {
-    id: '1',
-    title: 'Will Bitcoin exceed $100k by Dec 2024?',
-    description: 'Bitcoin reaching $100,000 USD on any major exchange',
-    category: 'CRYPTO',
-    expiresAt: '2024-12-31',
-    totalVolume: 25000,
-    outcomes: [
-      { id: 'yes', name: 'Yes', color: '#22C55E', currentPrice: 0.65 },
-      { id: 'no', name: 'No', color: '#EF4444', currentPrice: 0.35 },
-    ],
-  },
-  {
-    id: '2',
-    title: 'Will Trump win the 2024 Presidential Election?',
-    description: 'Donald Trump wins the 2024 US Presidential Election',
-    category: 'POLITICS',
-    expiresAt: '2024-11-05',
-    totalVolume: 52000,
-    outcomes: [
-      { id: 'yes', name: 'Yes', color: '#22C55E', currentPrice: 0.52 },
-      { id: 'no', name: 'No', color: '#EF4444', currentPrice: 0.48 },
-    ],
-  },
-  {
-    id: '3',
-    title: 'Will Taylor Swift announce retirement in 2024?',
-    description: 'Taylor Swift announces retirement from music',
-    category: 'ENTERTAINMENT',
-    expiresAt: '2024-12-31',
-    totalVolume: 8500,
-    outcomes: [
-      { id: 'yes', name: 'Yes', color: '#22C55E', currentPrice: 0.15 },
-      { id: 'no', name: 'No', color: '#EF4444', currentPrice: 0.85 },
-    ],
-  },
-  {
-    id: '4',
-    title: 'Will ETH hit $5k in 2024?',
-    description: 'Ethereum reaches $5,000 USD',
-    category: 'CRYPTO',
-    expiresAt: '2024-12-31',
-    totalVolume: 18000,
-    outcomes: [
-      { id: 'yes', name: 'Yes', color: '#22C55E', currentPrice: 0.42 },
-      { id: 'no', name: 'No', color: '#EF4444', currentPrice: 0.58 },
-    ],
-  },
-];
+// Convert prediction questions to market format
+const convertToMarkets = (questions: typeof PREDICTION_QUESTIONS) => {
+  const markets: Array<{
+    id: string;
+    title: string;
+    description: string;
+    category: string;
+    expiresAt: string;
+    totalVolume: number;
+    outcomes: Array<{ id: string; name: string; color: string; currentPrice: number }>;
+  }> = [];
+  
+  Object.entries(questions).forEach(([category, questionsList]) => {
+    questionsList.forEach((q, index) => {
+      // Generate pseudo-random but consistent prices based on ID
+      const seed = q.id.charCodeAt(0) + q.id.charCodeAt(q.id.length - 1);
+      const basePrice = 0.3 + (seed % 50) / 100; // 0.3 to 0.8 range
+      
+      markets.push({
+        id: q.id,
+        title: q.title,
+        description: q.description,
+        category: q.category,
+        expiresAt: q.expiresAt,
+        totalVolume: Math.floor(5000 + Math.random() * 50000),
+        outcomes: [
+          { id: 'yes', name: 'Yes', color: '#22C55E', currentPrice: basePrice },
+          { id: 'no', name: 'No', color: '#EF4444', currentPrice: 1 - basePrice },
+        ],
+      });
+    });
+  });
+  
+  return markets;
+};
+
+const ALL_MARKETS = convertToMarkets(PREDICTION_QUESTIONS);
 
 const CATEGORIES = ['All', 'Politics', 'Sports', 'Crypto', 'Entertainment', 'Science'];
 
@@ -61,7 +48,7 @@ export default function MarketsScreen() {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [markets] = useState(MOCK_MARKETS);
+  const [markets] = useState(ALL_MARKETS);
   const [userBalance] = useState(1000); // Demo starting balance
 
   const onRefresh = () => {

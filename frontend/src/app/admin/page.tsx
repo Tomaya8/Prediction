@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line 
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line
 } from 'recharts';
 import { Users, TrendingUp, DollarSign, Activity } from 'lucide-react';
 
@@ -30,24 +30,36 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Simulated data - replace with actual Firebase queries
+    // Fetch data from Firebase Firestore
     const fetchData = async () => {
-      setStats({
-        totalUsers: 1250,
-        activeUsers: 342,
-        totalMarkets: 48,
-        totalVolume: 2500000,
-      });
-      setChartData([
-        { name: 'Mon', users: 120, volume: 45000 },
-        { name: 'Tue', users: 145, volume: 52000 },
-        { name: 'Wed', users: 132, volume: 48000 },
-        { name: 'Thu', users: 168, volume: 61000 },
-        { name: 'Fri', users: 195, volume: 75000 },
-        { name: 'Sat', users: 210, volume: 82000 },
-        { name: 'Sun', users: 188, volume: 69000 },
-      ]);
-      setLoading(false);
+      try {
+        // In production, import and use Firebase Admin SDK or client SDK
+        // For now, using mock data - replace with actual Firestore queries
+        
+        // Example Firestore query structure:
+        // const usersSnapshot = await getDocs(collection(db, 'users'));
+        // const marketsSnapshot = await getDocs(collection(db, 'markets'));
+        
+        setStats({
+          totalUsers: 1250,
+          activeUsers: 342,
+          totalMarkets: 48,
+          totalVolume: 2500000,
+        });
+        setChartData([
+          { name: 'Mon', users: 120, volume: 45000 },
+          { name: 'Tue', users: 145, volume: 52000 },
+          { name: 'Wed', users: 132, volume: 48000 },
+          { name: 'Thu', users: 168, volume: 61000 },
+          { name: 'Fri', users: 195, volume: 75000 },
+          { name: 'Sat', users: 210, volume: 82000 },
+          { name: 'Sun', users: 188, volume: 69000 },
+        ]);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchData();
   }, []);

@@ -1,459 +1,299 @@
-/**
- * Trades API Routes
- * RESTful endpoints for trading operations
- */
+import { Hono } from 'hono';
+import { getFirebaseAdmin } from '../lib/firebase-admin';
+import { calculateBuyCost, calculatePrice, calculateAllPrices, executeTrade } from '../lib/lmsr';
 
-import { Router, Request, Response } from 'express';
-import { PrismaClient, TradeType } from '@prisma/client';
-import { executeBuy, executeSell, calculatePrices } from '../lib/lmsr';
+const trades = new Hono();
 
-const router = Router();
-const prisma = new PrismaClient();
-
-// ============================================
-// TRADE ENDPOINTS
-// ============================================
-
-/**
- * POST /api/trades
- * Execute a trade (buy or sell)
- */
-router.post('/', async (req: Request, res: Response) => {
+// Get all markets
+trades.get('/markets', async (c) => {
   try {
-    // Get user from auth middleware
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authentication required'
-      });
-    }
-
-    const { marketId, outcomeId, quantity, type } = req.body;
-
-    // Validation
-    if (!marketId || !outcomeId || !quantity || !type) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required fields: marketId, outcomeId, quantity, type'
-      });
-    }
-
-    if (quantity <= 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Quantity must be positive'
-      });
-    }
-
-    if (!['BUY', 'SELL'].includes(type)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Type must be BUY or SELL'
-      });
-    }
-
-    // Get market with outcomes
-    const market = await prisma.market.findUnique({
-      where: { id: marketId },
-      include: {
-        outcomes: true
-      }
-    });
-
-    if (!market) {
-      return res.status(404).json({
-        success: false,
-        error: 'Market not found'
-      });
-    }
-
-    if (market.status !== 'ACTIVE') {
-      return res.status(400).json({
-        success: false,
-        error: 'Market is not active for trading'
-      });
-    }
-
-    if (new Date() > new Date(market.expiresAt)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Market has expired'
-      });
-    }
-
-    // Find outcome
-    const outcomeIndex = market.outcomes.findIndex(o => o.id === outcomeId);
-    if (outcomeIndex === -1) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid outcome'
-      });
-    }
-
-    // Get user
-    const user = await prisma.user.findUnique({
-      where: { id: userId }
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found'
-      });
-    }
-
-    // Prepare LMSR market
-    const lmsrMarket = {
-      id: market.id,
-      liquidityB: market.liquidityB,
-      outcomes: market.outcomes.map(o => ({
-        id: o.id,
-        name: o.name,
-        quantity: parseFloat(o.quantity.toString())
-      }))
-    };
-
-    let tradeResult;
-    let isBuy = type === 'BUY';
-
-    if (isBuy) {
-      // Execute buy
-      tradeResult = executeBuy(lmsrMarket, outcomeIndex, quantity, user.creditBalance);
-    } else {
-      // Check user's holding for sell
-      const holding = await prisma.holding.findUnique({
-        where: {
-          userId_marketId_outcomeId: {
-            userId,
-            marketId,
-            outcomeId
-          }
-        }
-      });
-
-      const currentHolding = holding ? parseFloat(holding.quantity.toString()) : 0;
-      tradeResult = executeSell(lmsrMarket, outcomeIndex, quantity, currentHolding);
-    }
-
-    if (!tradeResult.success) {
-      return res.status(400).json({
-        success: false,
-        error: tradeResult.error
-      });
-    }
-
-    // Execute trade in transaction
-    const result = await prisma.$transaction(async (tx) => {
-      const now = new Date();
-      
-      if (isBuy) {
-        // Deduct credits
-        await tx.user.update({
-          where: { id: userId },
-          data: {
-            creditBalance: { decrement: tradeResult.cost! },
-            totalCreditsSpent: { increment: tradeResult.cost! },
-            totalTrades: { increment: 1 }
-          }
+    const { db } = getFirebaseAdmin();
+    const marketsRef = db.collection('markets');
+    const snapshot = await marketsRef.get();
+    
+    const markets = await Promise.all(
+      snapshot.docs.map(async (doc) => {
+        const data = doc.data();
+        // Calculate current prices using LMSR
+        const prices = calculateAllPrices({
+          id: doc.id,
+          outcomes: data.outcomes || [],
+          liquidityParameter: data.liquidityParameter || 1000,
         });
-
-        // Record transaction
-        await tx.transaction.create({
-          data: {
-            userId,
-            amount: -tradeResult.cost!,
-            type: 'TRADE_BUY',
-            description: `Buy ${quantity} shares of ${market.outcomes[outcomeIndex].name}`,
-            referenceId: market.id
-          }
-        });
-
-        // Update or create holding
-        const existingHolding = await tx.holding.findUnique({
-          where: {
-            userId_marketId_outcomeId: {
-              userId,
-              marketId,
-              outcomeId
-            }
-          }
-        });
-
-        if (existingHolding) {
-          // Calculate new average cost
-          const totalCost = (existingHolding.quantity * existingHolding.avgCost) + tradeResult.cost!;
-          const newQuantity = existingHolding.quantity + quantity;
-          const newAvgCost = totalCost / newQuantity;
-
-          await tx.holding.update({
-            where: { id: existingHolding.id },
-            data: {
-              quantity: newQuantity,
-              avgCost: newAvgCost,
-              currentValue: Math.round(tradeResult.cost! * 100) / 100
-            }
-          });
-        } else {
-          await tx.holding.create({
-            data: {
-              userId,
-              marketId,
-              outcomeId,
-              quantity,
-              avgCost: tradeResult.cost! / quantity,
-              currentValue: tradeResult.cost!
-            }
-          });
-        }
-      } else {
-        // Add credits (revenue is negative cost)
-        const revenue = -tradeResult.cost!;
         
-        await tx.user.update({
-          where: { id: userId },
-          data: {
-            creditBalance: { increment: revenue },
-            totalCreditsEarned: { increment: revenue }
-          }
-        });
+        return {
+          id: doc.id,
+          ...data,
+          prices,
+        };
+      })
+    );
+    
+    return c.json({ success: true, data: markets });
+  } catch (error) {
+    console.error('Error fetching markets:', error);
+    return c.json({ success: false, error: 'Failed to fetch markets' }, 500);
+  }
+});
 
-        // Record transaction
-        await tx.transaction.create({
-          data: {
-            userId,
-            amount: revenue,
-            type: 'TRADE_SELL',
-            description: `Sell ${quantity} shares of ${market.outcomes[outcomeIndex].name}`,
-            referenceId: market.id
-          }
-        });
-
-        // Update holding
-        const holding = await tx.holding.findUnique({
-          where: {
-            userId_marketId_outcomeId: {
-              userId,
-              marketId,
-              outcomeId
-            }
-          }
-        });
-
-        if (holding) {
-          const newQuantity = holding.quantity - quantity;
-          if (newQuantity <= 0) {
-            await tx.holding.delete({
-              where: { id: holding.id }
-            });
-          } else {
-            await tx.holding.update({
-              where: { id: holding.id },
-              data: {
-                quantity: newQuantity,
-                currentValue: Math.round((newQuantity * tradeResult.prices![outcomeIndex]) * 100) / 100
-              }
-            });
-          }
-        }
-      }
-
-      // Update outcome quantity
-      await tx.outcome.update({
-        where: { id: outcomeId },
-        data: {
-          quantity: tradeResult.newQuantity,
-          probability: tradeResult.prices![outcomeIndex]
-        }
-      });
-
-      // Update market volume
-      await tx.market.update({
-        where: { id: marketId },
-        data: {
-          totalVolume: { increment: Math.abs(tradeResult.cost!) }
-        }
-      });
-
-      // Record trade
-      const trade = await tx.trade.create({
-        data: {
-          userId,
-          marketId,
-          outcomeId,
-          type: isBuy ? TradeType.BUY : TradeType.SELL,
-          quantity,
-          pricePerShare: tradeResult.prices![outcomeIndex],
-          totalCost: Math.abs(tradeResult.cost!)
-        }
-      });
-
-      return trade;
-    });
-
-    // Emit WebSocket event for price update
-    if (req.io) {
-      req.io.to(`market:${marketId}`).emit('priceUpdate', {
-        marketId,
-        outcomeId,
-        newQuantity: tradeResult.newQuantity,
-        prices: tradeResult.prices
-      });
+// Get single market
+trades.get('/markets/:id', async (c) => {
+  try {
+    const { db } = getFirebaseAdmin();
+    const marketId = c.req.param('id');
+    
+    const marketRef = db.collection('markets').doc(marketId);
+    const doc = await marketRef.get();
+    
+    if (!doc.exists) {
+      return c.json({ success: false, error: 'Market not found' }, 404);
     }
-
-    res.status(201).json({
+    
+    const data = doc.data();
+    const prices = calculateAllPrices({
+      id: doc.id,
+      outcomes: data?.outcomes || [],
+      liquidityParameter: data?.liquidityParameter || 1000,
+    });
+    
+    return c.json({
       success: true,
       data: {
-        trade: result,
-        cost: tradeResult.cost,
-        newPrices: tradeResult.prices
-      }
+        id: doc.id,
+        ...data,
+        prices,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching market:', error);
+    return c.json({ success: false, error: 'Failed to fetch market' }, 500);
+  }
+});
+
+// Execute a trade (buy shares)
+trades.post('/trade', async (c) => {
+  try {
+    const { db, auth } = getFirebaseAdmin();
+    const body = await c.req.json();
+    
+    const { marketId, outcomeId, amount, userId } = body;
+    
+    if (!marketId || !outcomeId || !amount || !userId) {
+      return c.json({ success: false, error: 'Missing required fields' }, 400);
+    }
+    
+    // Get market
+    const marketRef = db.collection('markets').doc(marketId);
+    const marketDoc = await marketRef.get();
+    
+    if (!marketDoc.exists) {
+      return c.json({ success: false, error: 'Market not found' }, 404);
+    }
+    
+    const marketData = marketDoc.data();
+    const market = {
+      id: marketId,
+      outcomes: marketData?.outcomes || [],
+      liquidityParameter: marketData?.liquidityParameter || 1000,
+    };
+    
+    // Calculate cost
+    const cost = calculateBuyCost(market, outcomeId, amount);
+    
+    // Get user balance
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+    
+    if (!userDoc.exists) {
+      return c.json({ success: false, error: 'User not found' }, 404);
+    }
+    
+    const userData = userDoc.data();
+    const currentBalance = userData?.creditBalance || 0;
+    
+    if (currentBalance < cost) {
+      return c.json({ success: false, error: 'Insufficient balance' }, 400);
+    }
+    
+    // Execute trade in transaction
+    await db.runTransaction(async (tx) => {
+      // Update market quantities
+      const outcomes = market.outcomes.map(o =>
+        o.id === outcomeId
+          ? { ...o, quantity: o.quantity + amount }
+          : o
+      );
+      
+      tx.update(marketRef, { outcomes });
+      
+      // Deduct user balance
+      tx.update(userRef, {
+        creditBalance: currentBalance - cost,
+      });
+      
+      // Record trade
+      const tradesRef = db.collection('trades');
+      tx.create(tradesRef.doc(), {
+        userId,
+        marketId,
+        outcomeId,
+        amount,
+        cost,
+        type: 'BUY',
+        createdAt: new Date().toISOString(),
+      });
+    });
+    
+    // Get updated prices
+    const updatedPrices = calculateAllPrices({
+      ...market,
+      outcomes: market.outcomes.map(o =>
+        o.id === outcomeId
+          ? { ...o, quantity: o.quantity + amount }
+          : o
+      ),
+    });
+    
+    return c.json({
+      success: true,
+      data: {
+        cost,
+        newBalance: currentBalance - cost,
+        prices: updatedPrices,
+      },
     });
   } catch (error) {
     console.error('Error executing trade:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to execute trade'
-    });
+    return c.json({ success: false, error: 'Failed to execute trade' }, 500);
   }
 });
 
-/**
- * GET /api/trades
- * Get user's trade history
- */
-router.get('/', async (req: Request, res: Response) => {
+// Get user portfolio
+trades.get('/portfolio/:userId', async (c) => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authentication required'
-      });
-    }
-
-    const { marketId, limit = '50', offset = '0' } = req.query;
-
-    const where: any = { userId };
-    if (marketId) {
-      where.marketId = marketId;
-    }
-
-    const trades = await prisma.trade.findMany({
-      where,
-      include: {
-        market: {
-          select: {
-            id: true,
-            title: true,
-            category: true
-          }
-        },
-        outcome: {
-          select: {
-            id: true,
-            name: true,
-            color: true
-          }
-        }
-      },
-      orderBy: { createdAt: 'desc' },
-      take: parseInt(limit as string),
-      skip: parseInt(offset as string)
-    });
-
-    res.json({
-      success: true,
-      data: trades
-    });
-  } catch (error) {
-    console.error('Error fetching trades:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch trades'
-    });
-  }
-});
-
-/**
- * GET /api/trades/portfolio
- * Get user's portfolio (holdings)
- */
-router.get('/portfolio', async (req: Request, res: Response) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authentication required'
-      });
-    }
-
-    const holdings = await prisma.holding.findMany({
-      where: {
-        userId,
-        quantity: { gt: 0 }
-      },
-      include: {
-        market: {
-          select: {
-            id: true,
-            title: true,
-            category: true,
-            status: true,
-            expiresAt: true,
-            resolvedOutcomeId: true
-          }
-        },
-        outcome: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
-            isWinner: true,
-            probability: true
-          }
-        }
-      },
-      orderBy: { updatedAt: 'desc' }
-    });
-
-    // Calculate total portfolio value
-    let totalValue = 0;
-    let totalCost = 0;
-
-    const holdingsWithValue = holdings.map(h => {
-      const value = h.quantity * h.outcome.probability;
-      totalValue += value;
-      totalCost += h.quantity * h.avgCost;
-      
-      return {
-        ...h,
-        currentValue: Math.round(value * 100) / 100,
-        profitLoss: Math.round((value - (h.quantity * h.avgCost)) * 100) / 100,
-        roi: h.avgCost > 0 ? ((value - (h.quantity * h.avgCost)) / (h.quantity * h.avgCost)) * 100 : 0
-      };
-    });
-
-    res.json({
-      success: true,
-      data: {
-        holdings: holdingsWithValue,
-        summary: {
-          totalValue: Math.round(totalValue * 100) / 100,
-          totalCost: Math.round(totalCost * 100) / 100,
-          totalProfitLoss: Math.round((totalValue - totalCost) * 100) / 100,
-          holdingCount: holdings.length
-        }
+    const { db } = getFirebaseAdmin();
+    const userId = c.req.param('userId');
+    
+    // Get user's trades
+    const tradesRef = db.collection('trades');
+    const snapshot = await tradesRef.where('userId', '==', userId).get();
+    
+    const trades = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    
+    // Group by market
+    const holdings: Record<string, {
+      marketId: string;
+      outcomes: Record<string, number>;
+      totalCost: number;
+    }> = {};
+    
+    for (const trade of trades) {
+      if (!holdings[trade.marketId]) {
+        holdings[trade.marketId] = {
+          marketId: trade.marketId,
+          outcomes: {},
+          totalCost: 0,
+        };
       }
-    });
+      
+      const outcome = trade.outcomeId;
+      holdings[trade.marketId].outcomes[outcome] = 
+        (holdings[trade.marketId].outcomes[outcome] || 0) + trade.amount;
+      holdings[trade.marketId].totalCost += trade.cost;
+    }
+    
+    // Get market info for each holding
+    const portfolio = await Promise.all(
+      Object.values(holdings).map(async (holding) => {
+        const marketDoc = await db.collection('markets').doc(holding.marketId).get();
+        const marketData = marketDoc.data();
+        
+        // Calculate current value
+        let currentValue = 0;
+        const market = {
+          id: holding.marketId,
+          outcomes: marketData?.outcomes || [],
+          liquidityParameter: marketData?.liquidityParameter || 1000,
+        };
+        
+        for (const [outcomeId, shares] of Object.entries(holding.outcomes)) {
+          const price = calculatePrice(market, outcomeId);
+          currentValue += (price * (shares as number));
+        }
+        
+        return {
+          marketId: holding.marketId,
+          marketTitle: marketData?.title,
+          outcomes: holding.outcomes,
+          totalCost: holding.totalCost,
+          currentValue: Math.round(currentValue * 100) / 100,
+          profitLoss: Math.round((currentValue - holding.totalCost) * 100) / 100,
+        };
+      })
+    );
+    
+    return c.json({ success: true, data: portfolio });
   } catch (error) {
     console.error('Error fetching portfolio:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch portfolio'
-    });
+    return c.json({ success: false, error: 'Failed to fetch portfolio' }, 500);
   }
 });
 
-export default router;
+// Resolve a market (admin only)
+trades.post('/resolve', async (c) => {
+  try {
+    const { db } = getFirebaseAdmin();
+    const body = await c.req.json();
+    
+    const { marketId, winningOutcomeId } = body;
+    
+    if (!marketId || !winningOutcomeId) {
+      return c.json({ success: false, error: 'Missing required fields' }, 400);
+    }
+    
+    const marketRef = db.collection('markets').doc(marketId);
+    const marketDoc = await marketRef.get();
+    
+    if (!marketDoc.exists) {
+      return c.json({ success: false, error: 'Market not found' }, 404);
+    }
+    
+    // Update market status
+    await marketRef.update({
+      status: 'RESOLVED',
+      winningOutcomeId,
+      resolvedAt: new Date().toISOString(),
+    });
+    
+    // Calculate and distribute winnings
+    const tradesRef = db.collection('trades');
+    const winningTrades = await tradesRef
+      .where('marketId', '==', marketId)
+      .where('outcomeId', '==', winningOutcomeId)
+      .get();
+    
+    await db.runTransaction(async (tx) => {
+      for (const tradeDoc of winningTrades.docs) {
+        const trade = tradeDoc.data();
+        const userRef = db.collection('users').doc(trade.userId);
+        const userDoc = await userRef.get();
+        const userData = userDoc.data();
+        
+        // Award winnings (1 credit per share for winning outcome)
+        tx.update(userRef, {
+          creditBalance: (userData?.creditBalance || 0) + trade.amount,
+        });
+      }
+    });
+    
+    return c.json({ success: true, data: { message: 'Market resolved successfully' } });
+  } catch (error) {
+    console.error('Error resolving market:', error);
+    return c.json({ success: false, error: 'Failed to resolve market' }, 500);
+  }
+});
+
+export default trades;
