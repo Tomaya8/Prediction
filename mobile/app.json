@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "PredictSpinz",
+    "slug": "predictspinz",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "scheme": "predictspinz",
+    "splash": {
+      "image": "./splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1E1E2E"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.predictspinz.app",
+      "infoPlist": {
+        "NSPredictionMarketUsageDescription": "PredictSpinz allows you to trade virtual credits on real-world events.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./icon.png",
+        "backgroundColor": "#1E1E2E"
+      },
+      "package": "com.predictspinz.app",
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ]
+    },
+    "web": {
+      "favicon": "./favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#1E1E2E",
+          "image": "./splash.png",
+          "imageWidth": 200
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "predictspinz-app"
+      }
+    }
+  }
+}

@@ -1,0 +1,390 @@
+// PredictSpinz Database Schema
+// Virtual Credit Prediction Market
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER MANAGEMENT
+// ============================================
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  displayName       String?
+  avatarUrl         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Credit balance
+  creditBalance     Int       @default(1000) // Starting credits for new users
+  totalCreditsEarned Int      @default(0)
+  totalCreditsSpent Int       @default(0)
+
+  // Performance stats
+  totalTrades       Int       @default(0)
+  winningTrades     Int       @default(0)
+  totalWinnings     Int       @default(0)
+  roi               Float     @default(0.0) // Return on Investment
+
+  // Streaks and engagement
+  currentStreak     Int       @default(0)
+  longestStreak     Int       @default(0)
+  lastActiveDate    DateTime?
+
+  // Premium status
+  isPremium         Boolean   @default(false)
+  premiumExpiresAt  DateTime?
+
+  // Firebase UID for authentication
+  firebaseUid       String    @unique
+
+  // Relations
+  holdings          Holding[]
+  trades            Trade[]
+  transactions      Transaction[]
+  achievements      UserAchievement[]
+  followers         Follow[]  @relation("following")
+  following         Follow[]  @relation("follower")
+  comments          Comment[]
+
+  @@index([email])
+  @@index([firebaseUid])
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower    User     @relation("follower", fields: [followerId], references: [id])
+  following   User     @relation("following", fields: [followingId], references: [id])
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+// ============================================
+// CREDIT TRANSACTIONS
+// ============================================
+
+model Transaction {
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Int      // Positive for credits received, negative for credits spent
+  type        TransactionType
+  description String?
+  referenceId String?  // Optional reference to related entity (market, purchase, etc.)
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+enum TransactionType {
+  STARTING_BONUS    // New user signup bonus
+  DAILY_REWARD      // Daily login reward
+  WEEKLY_REWARD     // Weekly engagement reward
+  TRADE_BUY         // Credits spent on buying shares
+  TRADE_SELL        // Credits received from selling shares
+  MARKET_RESOLVED   // Winnings from resolved market
+  CREDIT_PURCHASE  // Credits purchased with real money
+  ACHIEVEMENT_REWARD // Bonus for achievements
+  REFERRAL_BONUS   // Bonus for referring users
+  ADMIN_ADJUSTMENT // Admin can adjust balances
+}
+
+// ============================================
+// MARKETS
+// ============================================
+
+model Market {
+  id          String      @id @default(cuid())
+  title       String
+  description String?
+  category    MarketCategory
+  status      MarketStatus @default(ACTIVE)
+  
+  // LMSR parameters
+  liquidityB  Float       @default(1000.0) // Liquidity parameter b
+  
+  // Timestamps
+  expiresAt   DateTime
+  resolvedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Resolution
+  resolvedOutcomeId String?
+
+  // Statistics
+  totalVolume    Int       @default(0) // Total trading volume
+  uniqueTraders  Int       @default(0)
+
+  // Relations
+  outcomes       Outcome[]
+  trades         Trade[]
+  comments       Comment[]
+
+  @@index([category])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([createdAt])
+}
+
+enum MarketCategory {
+  POLITICS
+  SPORTS
+  CRYPTO
+  ENTERTAINMENT
+  SCIENCE
+  BUSINESS
+  TECHNOLOGY
+  OTHER
+}
+
+enum MarketStatus {
+  DRAFT      // Market being created
+  ACTIVE     // Trading open
+  RESOLVED   // Market resolved
+  CANCELLED  // Market cancelled (refunds issued)
+}
+
+// ============================================
+// MARKET OUTCOMES
+// ============================================
+
+model Outcome {
+  id          String   @id @default(cuid())
+  marketId    String
+  name        String   // e.g., "Yes", "No", or "Team A wins"
+  color       String?  // For UI display (hex color)
+  
+  // LMSR state - quantity of shares outstanding
+  quantity    Float    @default(0.0)
+  
+  // Calculated probability (cached for performance)
+  probability Float    @default(0.5)
+  
+  // Is this the winning outcome?
+  isWinner    Boolean  @default(false)
+
+  // Relations
+  market      Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  holdings    Holding[]
+  trades      Trade[]
+
+  @@unique([marketId, name])
+  @@index([marketId])
+}
+
+// ============================================
+// TRADING
+// ============================================
+
+model Trade {
+  id          String    @id @default(cuid())
+  userId      String
+  marketId    String
+  outcomeId   String
+  type        TradeType
+  quantity    Float     // Number of shares traded
+  pricePerShare Float   // Price at time of trade
+  totalCost   Int       // Total credits spent/received
+  
+  // State
+  createdAt   DateTime  @default(now())
+  
+  // Relations
+  user        User      @relation(fields: [userId], references: [id])
+  market      Market    @relation(fields: [marketId], references: [id])
+  outcome     Outcome   @relation(fields: [outcomeId], references: [id])
+
+  @@index([userId])
+  @@index([marketId])
+  @@index([outcomeId])
+  @@index([createdAt])
+}
+
+enum TradeType {
+  BUY   // User buys shares
+  SELL  // User sells shares
+}
+
+// ============================================
+// PORTFOLIO / HOLDINGS
+// ============================================
+
+model Holding {
+  id          String   @id @default(cuid())
+  userId      String
+  marketId    String
+  outcomeId   String
+  
+  // Quantity of shares held
+  quantity    Float    @default(0.0)
+  
+  // Average cost basis (for P&L calculation)
+  avgCost     Float    @default(0.0)
+  
+  // Current value (calculated from current price)
+  currentValue Int     @default(0)
+  
+  // Unrealized P&L
+  profitLoss  Int      @default(0)
+  
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id])
+  market      Market   @relation(fields: [marketId], references: [id])
+  outcome     Outcome  @relation(fields: [outcomeId], references: [id])
+
+  @@unique([userId, marketId, outcomeId])
+  @@index([userId])
+  @@index([marketId])
+}
+
+// ============================================
+// ACHIEVEMENTS & GAMIFICATION
+// ============================================
+
+model Achievement {
+  id          String   @id @default(cuid())
+  code        String   @unique // e.g., "FIRST_TRADE", "WIN_STREAK_10"
+  name        String
+  description String
+  iconUrl     String?
+  creditReward Int     @default(0) // Bonus credits for earning this achievement
+  
+  // Criteria
+  criteriaType String  // e.g., "TRADE_COUNT", "WIN_STREAK", "MARKET_COUNT"
+  criteriaValue Int    // Target value to achieve
+  
+  // Relations
+  users       UserAchievement[]
+
+  @@index([code])
+}
+
+model UserAchievement {
+  id            String   @id @default(cuid())
+  userId        String
+  achievementId String
+  earnedAt      DateTime @default(now())
+
+  user          User       @relation(fields: [userId], references: [id])
+  achievement   Achievement @relation(fields: [achievementId], references: [id])
+
+  @@unique([userId, achievementId])
+  @@index([userId])
+}
+
+// ============================================
+// COMMENTS / SOCIAL
+// ============================================
+
+model Comment {
+  id          String   @id @default(cuid())
+  userId      String
+  marketId    String
+  content     String
+  
+  // Replies
+  parentId    String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id])
+  market      Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  parent      Comment? @relation("CommentReplies", fields: [parentId], references: [id])
+  replies     Comment[] @relation("CommentReplies")
+
+  @@index([marketId])
+  @@index([userId])
+  @@index([parentId])
+}
+
+// ============================================
+// CREDIT PACKS (MONETIZATION)
+// ============================================
+
+model CreditPack {
+  id          String   @id @default(cuid())
+  code        String   @unique // e.g., "STARTER", "PRO", "VIP"
+  name        String
+  description String?
+  credits     Int
+  priceUsd    Float
+  
+  // Display
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+
+  @@index([code])
+  @@index([isActive])
+}
+
+// ============================================
+// LEADERBOARD SNAPSHOTS (for performance)
+// ============================================
+
+model LeaderboardSnapshot {
+  id          String   @id @default(cuid())
+  period      LeaderboardPeriod // DAILY, WEEKLY, ALL_TIME
+  userId      String
+  rank        Int
+  score       Float    // Credits or ROI
+  scoreType   ScoreType // CREDITS, ROI
+  
+  recordedAt  DateTime @default(now())
+
+  @@unique([period, userId, recordedAt])
+  @@index([period])
+  @@index([recordedAt])
+}
+
+enum LeaderboardPeriod {
+  DAILY
+  WEEKLY
+  ALL_TIME
+}
+
+enum ScoreType {
+  CREDITS
+  ROI
+}
+
+// ============================================
+// AUDIT LOG (for admin)
+// ============================================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  entityType  String   // e.g., "Market", "User", "Trade"
+  entityId    String?
+  userId      String?  // Admin user who performed action
+  details     Json?    // Additional details
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
