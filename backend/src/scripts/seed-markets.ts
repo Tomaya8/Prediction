@@ -3,19 +3,31 @@
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import * as fs from 'fs';
+import * as path from 'path';
 
-// You'll need to download service account from Firebase Console
-const serviceAccount = {
-  type: 'service_account',
-  project_id: process.env.FIREBASE_PROJECT_ID || 'prediction-app-2026',
-  private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  client_email: process.env.FIREBASE_CLIENT_EMAIL,
-};
+// Use process.cwd() to get the project root (works in both CommonJS and ESM)
+const serviceAccountPath = path.join(process.cwd(), 'backend/service-account.json');
+let serviceAccount: any;
+
+if (fs.existsSync(serviceAccountPath)) {
+  serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+  console.log('✅ Loaded service account from file');
+} else {
+  // Fallback to environment variables
+  serviceAccount = {
+    type: 'service_account',
+    project_id: process.env.FIREBASE_PROJECT_ID || 'prediction-app-2026',
+    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    client_email: process.env.FIREBASE_CLIENT_EMAIL,
+  };
+  console.log('⚠️ Using environment variables for service account');
+}
 
 // Initialize Firebase Admin
 if (getApps().length === 0) {
   initializeApp({
-    credential: cert(serviceAccount as any),
+    credential: cert(serviceAccount),
   });
 }
 
