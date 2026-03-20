@@ -5,9 +5,11 @@
 
 import { Router, Request, Response } from 'express';
 import { PrismaClient, TransactionType } from '@prisma/client';
+import { authenticateUser } from '../middleware/auth';
 
 const router = Router();
 const prisma = new PrismaClient();
+const getUser = (req: Request) => (req as any).user as { id: string; isAdmin?: boolean } | undefined;
 
 // ============================================
 // USER ENDPOINTS
@@ -17,9 +19,9 @@ const prisma = new PrismaClient();
  * GET /api/users/me
  * Get current user's profile
  */
-router.get('/me', async (req: Request, res: Response) => {
+router.get('/me', authenticateUser, async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = getUser(req)?.id;
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -82,9 +84,9 @@ router.get('/me', async (req: Request, res: Response) => {
  * PUT /api/users/me
  * Update user profile
  */
-router.put('/me', async (req: Request, res: Response) => {
+router.put('/me', authenticateUser, async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = getUser(req)?.id;
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -126,9 +128,9 @@ router.put('/me', async (req: Request, res: Response) => {
  * GET /api/users/me/transactions
  * Get user's transaction history
  */
-router.get('/me/transactions', async (req: Request, res: Response) => {
+router.get('/me/transactions', authenticateUser, async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = getUser(req)?.id;
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -167,9 +169,9 @@ router.get('/me/transactions', async (req: Request, res: Response) => {
  * GET /api/users/me/stats
  * Get user's detailed statistics
  */
-router.get('/me/stats', async (req: Request, res: Response) => {
+router.get('/me/stats', authenticateUser, async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = getUser(req)?.id;
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -262,9 +264,9 @@ router.get('/me/stats', async (req: Request, res: Response) => {
  * POST /api/users/me/daily-reward
  * Claim daily login reward
  */
-router.post('/me/daily-reward', async (req: Request, res: Response) => {
+router.post('/me/daily-reward', authenticateUser, async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = getUser(req)?.id;
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -346,9 +348,9 @@ router.post('/me/daily-reward', async (req: Request, res: Response) => {
  * POST /api/users/me/buy-credits
  * Purchase credits (mock - in production would integrate with payment processor)
  */
-router.post('/me/buy-credits', async (req: Request, res: Response) => {
+router.post('/me/buy-credits', authenticateUser, async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = getUser(req)?.id;
     if (!userId) {
       return res.status(401).json({
         success: false,

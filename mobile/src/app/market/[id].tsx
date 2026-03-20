@@ -1,10 +1,23 @@
-import { useState, use } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors } from '../../lib/colors';
+import {
+  PriceChart,
+  VolumeChart,
+  generateMockPriceHistory,
+  generateMockVolumeData,
+  Comments,
+  NewsLinks,
+  generateMockNews,
+  OrderBook,
+  generateMockOrderBook,
+} from '../../lib/components';
+import { apiClient, type Market, type TradeResult } from '../../lib/api-client';
+import websocketService from '../../lib/websocket';
 
-// Mock market data (in production, fetch from API)
-const MOCK_MARKET = {
+// Default market data for fallback
+const DEFAULT_MARKET: Market = {
   id: '1',
   title: 'Will Bitcoin exceed $100k by Dec 2024?',
   description: 'Bitcoin reaching $100,000 USD on any major exchange before December 31, 2024.',
@@ -20,45 +33,227 @@ const MOCK_MARKET = {
 export default function MarketDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const [market] = useState(MOCK_MARKET);
+  const [market, setMarket] = useState<Market>(DEFAULT_MARKET);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedOutcome, setSelectedOutcome] = useState<string | null>(null);
-  const [quantity, setQuantity] = useState('10');
+  const [credits, setCredits] = useState('50');
   const [tradeType, setTradeType] = useState<'BUY' | 'SELL'>('BUY');
-  const [userBalance] = useState(1000);
+  const [userBalance, setUserBalance] = useState<number | null>(null);
+  const [previewShares, setPreviewShares] = useState<number | null>(null);
+  const [previewActualCost, setPreviewActualCost] = useState<number | null>(null);
+  const [executingTrade, setExecutingTrade] = useState(false);
 
-  const quantityNum = parseInt(quantity) || 0;
-  const selectedOutcomeData = market.outcomes.find(o => o.id === selectedOutcome);
-  const estimatedCost = selectedOutcomeData ? Math.round(quantityNum * selectedOutcomeData.currentPrice * 100) / 100 : 0;
+  // Chart data state - will be updated when market data loads
+  const [priceHistory, setPriceHistory] = useState(() => generateMockPriceHistory(0.65, 30));
+  const [volumeData] = useState(() => generateMockVolumeData(30));
 
-  const handleTrade = () => {
+  // Comments, news, order book
+  const [comments, setComments] = useState<any[]>([]);
+  const [news] = useState(() => generateMockNews(market.title));
+  const [orderBook, setOrderBook] = useState(() => generateMockOrderBook(0.65));
+
+  // Fetch market data from API
+  const fetchMarketData = useCallback(async (isRefresh = false) => {
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+      
+      const marketId = Array.isArray(id) ? id[0] : id || '1';
+      const response = await apiClient.getMarket(marketId);
+      
+      if (response.success && response.data) {
+        const fetchedMarket = response.data;
+
+        // Merge LMSR prices map into each outcome's currentPrice
+        if (fetchedMarket.prices) {
+          const pricesMap = fetchedMarket.prices!;
+          fetchedMarket.outcomes = fetchedMarket.outcomes.map((o: any) => ({
+            ...o,
+            currentPrice: pricesMap[o.id] ?? o.currentPrice ?? 0,
+          }));
+          const firstPrice = (Object.values(fetchedMarket.prices)[0] as number) || 0.5;
+          setPriceHistory(generateMockPriceHistory(firstPrice, 30));
+          setOrderBook(generateMockOrderBook(firstPrice));
+        }
+
+        setMarket(fetchedMarket);
+      } else {
+        setError(response.error || 'Failed to load market');
+      }
+    } catch (err) {
+      setError('Failed to load market. Please try again.');
+      console.error('Error fetching market:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [id]);
+
+  // Fetch user profile for real balance
+  useEffect(() => {
+    apiClient.getProfile().then(res => {
+      if (res.success && res.data) setUserBalance(res.data.creditBalance);
+    });
+  }, []);
+
+  // Live preview: given credits to spend → calculate shares + actual cost
+  useEffect(() => {
+    const amt = parseInt(credits) || 0;
+    if (!selectedOutcome || amt <= 0) {
+      setPreviewShares(null);
+      setPreviewActualCost(null);
+      return;
+    }
+    const mId = Array.isArray(id) ? id[0] : id || '1';
+    apiClient.previewByCost({ marketId: mId, outcomeId: selectedOutcome, credits: amt })
+      .then(res => {
+        if (res.success && res.data) {
+          setPreviewShares(res.data.shares);
+          setPreviewActualCost(res.data.actualCost);
+        }
+      });
+  }, [selectedOutcome, credits, id]);
+
+  // Initial data fetch
+  useEffect(() => {
+    fetchMarketData();
+  }, [fetchMarketData]);
+
+  // Subscribe to real-time price updates via WebSocket
+  useEffect(() => {
+    const marketId = Array.isArray(id) ? id[0] : id;
+    if (!marketId) return;
+
+    // Subscribe to price updates for this market
+    const handlePriceUpdate = (data: { marketId: string; prices: Record<string, number> }) => {
+      if (data.marketId === marketId) {
+        setMarket(prev => ({
+          ...prev,
+          prices: data.prices,
+          outcomes: prev.outcomes.map(o => ({
+            ...o,
+            currentPrice: data.prices[o.id] || o.currentPrice,
+          })),
+        }));
+      }
+    };
+
+    const unsubscribe = websocketService.on('PRICE_UPDATE', handlePriceUpdate);
+    websocketService.connect();
+
+    return () => {
+      unsubscribe();
+    };
+  }, [id]);
+
+  const marketId = Array.isArray(id) ? id[0] : id || '1';
+
+  const fetchComments = useCallback(async () => {
+    const res = await apiClient.getComments(marketId);
+    if (res.success && res.data) setComments(res.data);
+  }, [marketId]);
+
+  useEffect(() => { fetchComments(); }, [fetchComments]);
+
+  const handleAddComment = async (content: string) => {
+    const res = await apiClient.postComment(marketId, content);
+    if (res.success) fetchComments();
+    else Alert.alert('Error', res.error || 'Failed to post comment');
+  };
+
+  const handleLikeComment = async (commentId: string) => {
+    await apiClient.likeComment(marketId, commentId);
+    fetchComments();
+  };
+
+  // Execute trade via API
+  const handleTrade = async () => {
     if (!selectedOutcome) {
       Alert.alert('Error', 'Please select an outcome');
       return;
     }
-    if (quantityNum <= 0) {
-      Alert.alert('Error', 'Please enter a valid quantity');
+    if (!previewShares || previewShares <= 0) {
+      Alert.alert('Error', 'Enter an amount to spend');
       return;
     }
-    if (tradeType === 'BUY' && estimatedCost > userBalance) {
+
+    const cost = previewActualCost ?? 0;
+    const selectedOutcomeData = market.outcomes.find(o => o.id === selectedOutcome);
+
+    if (tradeType === 'BUY' && userBalance !== null && cost > userBalance) {
       Alert.alert('Error', 'Insufficient balance');
       return;
     }
 
     Alert.alert(
       'Confirm Trade',
-      `${tradeType} ${quantityNum} shares of ${selectedOutcomeData?.name} for ${estimatedCost} credits?`,
+      `Buy ${previewShares} shares of "${selectedOutcomeData?.name}" for ${cost} credits?\nMax payout: ${previewShares} credits`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Confirm', 
-          onPress: () => {
-            Alert.alert('Success', `Trade executed! ${tradeType === 'BUY' ? 'Bought' : 'Sold'} ${quantityNum} shares.`);
-            router.back();
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            setExecutingTrade(true);
+            try {
+              const mktId = Array.isArray(id) ? id[0] : id || '1';
+              const response = await apiClient.executeTrade({
+                marketId: mktId,
+                outcomeId: selectedOutcome,
+                amount: previewShares,
+              });
+
+              if (response.success && response.data) {
+                const result: TradeResult = response.data;
+                setUserBalance(result.newBalance);
+                setPreviewShares(null);
+                setPreviewActualCost(null);
+                Alert.alert(
+                  'Trade Placed!',
+                  `Bought ${previewShares} shares of ${selectedOutcomeData?.name}.\nCost: ${result.cost} credits\nMax payout: ${previewShares} credits\nBalance: ${result.newBalance} credits`
+                );
+                fetchMarketData();
+              } else {
+                Alert.alert('Error', response.error || 'Trade failed');
+              }
+            } catch (err) {
+              Alert.alert('Error', 'Failed to execute trade. Please try again.');
+              console.error('Trade error:', err);
+            } finally {
+              setExecutingTrade(false);
+            }
           }
         },
       ]
     );
   };
+
+  // Show loading state
+  if (loading && !refreshing) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.loadingText}>Loading market...</Text>
+      </View>
+    );
+  }
+
+  // Show error state when market didn't load (still showing default stub)
+  if (error && market.id === DEFAULT_MARKET.id) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={() => fetchMarketData()}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -72,40 +267,41 @@ export default function MarketDetailScreen() {
           <Text style={styles.description}>{market.description}</Text>
         </View>
 
-        {/* Probability Chart */}
+        {/* Price History Chart */}
         <View style={styles.probabilitySection}>
-          <Text style={styles.sectionTitle}>Current Probability</Text>
-          <View style={styles.probabilityBar}>
-            <View style={styles.probabilityContainer}>
-              <View style={[styles.probabilityFill, { width: '65%', backgroundColor: Colors.yes }]} />
-            </View>
-            <View style={styles.probabilityLabels}>
-              <Text style={[styles.probabilityText, { color: Colors.yes }]}>YES 65%</Text>
-              <Text style={[styles.probabilityText, { color: Colors.no }]}>NO 35%</Text>
-            </View>
-          </View>
+          <Text style={styles.sectionTitle}>Price History</Text>
+          <PriceChart data={priceHistory} />
+        </View>
+
+        {/* Volume Chart */}
+        <View style={styles.volumeSection}>
+          <VolumeChart data={volumeData} />
         </View>
 
         {/* Market Info */}
         <View style={styles.infoSection}>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>📊 Volume</Text>
+            <Text style={styles.infoLabel}>📊 Total Volume</Text>
             <Text style={styles.infoValue}>{market.totalVolume.toLocaleString()} credits</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>📅 Expires</Text>
-            <Text style={styles.infoValue}>December 31, 2024</Text>
+            <Text style={styles.infoValue}>
+              {new Date(market.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </Text>
           </View>
         </View>
 
         {/* Trading Section */}
         <View style={styles.tradingSection}>
           <Text style={styles.sectionTitle}>Trade</Text>
-          
+
           {/* Balance */}
           <View style={styles.balanceContainer}>
             <Text style={styles.balanceLabel}>Your Balance</Text>
-            <Text style={styles.balanceValue}>🔶 {userBalance} credits</Text>
+            <Text style={styles.balanceValue}>
+              {userBalance !== null ? `${userBalance.toLocaleString()} credits` : '—'}
+            </Text>
           </View>
 
           {/* Buy/Sell Toggle */}
@@ -114,17 +310,13 @@ export default function MarketDetailScreen() {
               style={[styles.toggleButton, tradeType === 'BUY' && styles.toggleBuy]}
               onPress={() => setTradeType('BUY')}
             >
-              <Text style={[styles.toggleText, tradeType === 'BUY' && styles.toggleTextActive]}>
-                Buy
-              </Text>
+              <Text style={[styles.toggleText, tradeType === 'BUY' && styles.toggleTextActive]}>Buy</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.toggleButton, tradeType === 'SELL' && styles.toggleSell]}
               onPress={() => setTradeType('SELL')}
             >
-              <Text style={[styles.toggleText, tradeType === 'SELL' && styles.toggleTextActive]}>
-                Sell
-              </Text>
+              <Text style={[styles.toggleText, tradeType === 'SELL' && styles.toggleTextActive]}>Sell</Text>
             </TouchableOpacity>
           </View>
 
@@ -137,27 +329,29 @@ export default function MarketDetailScreen() {
                 style={[
                   styles.outcomeButton,
                   selectedOutcome === outcome.id && styles.outcomeButtonSelected,
-                  { borderColor: outcome.color }
+                  selectedOutcome === outcome.id && { borderColor: outcome.color ?? Colors.primary },
                 ]}
                 onPress={() => setSelectedOutcome(outcome.id)}
               >
-                <View style={[styles.outcomeDot, { backgroundColor: outcome.color }]} />
-                <Text style={styles.outcomeName}>{outcome.name}</Text>
-                <Text style={[styles.outcomePrice, { color: outcome.color }]}>
-                  {(outcome.currentPrice * 100).toFixed(0)}%
+                <View style={styles.outcomeButtonHeader}>
+                  <View style={[styles.outcomeDot, { backgroundColor: outcome.color ?? '#888' }]} />
+                  <Text style={styles.outcomeName} numberOfLines={1}>{outcome.name}</Text>
+                </View>
+                <Text style={[styles.outcomePrice, { color: outcome.color ?? Colors.textSecondary }]}>
+                  {((outcome.currentPrice || 0) * 100).toFixed(0)}¢
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* Quantity Input */}
-          <Text style={styles.inputLabel}>Quantity</Text>
+          {/* Amount Input */}
+          <Text style={styles.inputLabel}>Amount to spend (credits)</Text>
           <TextInput
             style={styles.quantityInput}
-            value={quantity}
-            onChangeText={setQuantity}
+            value={credits}
+            onChangeText={setCredits}
             keyboardType="numeric"
-            placeholder="Enter quantity"
+            placeholder="50"
             placeholderTextColor="#666"
           />
 
@@ -167,30 +361,37 @@ export default function MarketDetailScreen() {
               <TouchableOpacity
                 key={amount}
                 style={styles.quickAmountButton}
-                onPress={() => setQuantity(amount.toString())}
+                onPress={() => setCredits(amount.toString())}
               >
                 <Text style={styles.quickAmountText}>{amount}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* Cost Summary */}
+          {/* Order Summary */}
           <View style={styles.costSummary}>
             <View style={styles.costRow}>
-              <Text style={styles.costLabel}>
-                {tradeType === 'BUY' ? 'Estimated Cost' : 'Estimated Revenue'}
-              </Text>
-              <Text style={[
-                styles.costValue,
-                tradeType === 'SELL' && styles.costValuePositive
-              ]}>
-                {tradeType === 'BUY' ? '-' : '+'}{estimatedCost.toFixed(2)} credits
+              <Text style={styles.costLabel}>You'll receive</Text>
+              <Text style={styles.costValue}>
+                {previewShares != null ? `${previewShares} shares` : '—'}
               </Text>
             </View>
-            {tradeType === 'BUY' && (
+            <View style={styles.costRow}>
+              <Text style={styles.costLabel}>Estimated cost</Text>
+              <Text style={styles.costValue}>
+                {previewActualCost != null ? `-${previewActualCost} credits` : '—'}
+              </Text>
+            </View>
+            <View style={[styles.costRow, styles.payoutRow]}>
+              <Text style={[styles.costLabel, styles.payoutLabel]}>Max payout</Text>
+              <Text style={[styles.costValue, styles.payoutValue]}>
+                {previewShares != null ? `+${previewShares} credits` : '—'}
+              </Text>
+            </View>
+            {previewActualCost != null && userBalance !== null && (
               <View style={styles.costRow}>
-                <Text style={styles.costLabel}>After Trade</Text>
-                <Text style={styles.costValue}>{(userBalance - estimatedCost).toFixed(2)} credits</Text>
+                <Text style={styles.costLabel}>Balance after</Text>
+                <Text style={styles.costValue}>{(userBalance - previewActualCost).toLocaleString()} credits</Text>
               </View>
             )}
           </View>
@@ -200,23 +401,57 @@ export default function MarketDetailScreen() {
             style={[
               styles.executeButton,
               tradeType === 'BUY' ? styles.executeBuy : styles.executeSell,
-              (!selectedOutcome || quantityNum <= 0) && styles.executeDisabled
+              (!selectedOutcome || !previewShares || executingTrade) && styles.executeDisabled,
             ]}
             onPress={handleTrade}
-            disabled={!selectedOutcome || quantityNum <= 0}
+            disabled={!selectedOutcome || !previewShares || executingTrade}
           >
-            <Text style={styles.executeButtonText}>
-              {tradeType === 'BUY' ? 'BUY' : 'SELL'} {quantityNum} SHARES
-            </Text>
+            {executingTrade
+              ? <ActivityIndicator color={Colors.textPrimary} />
+              : <Text style={styles.executeButtonText}>
+                  {previewShares
+                    ? `${tradeType === 'BUY' ? 'BUY' : 'SELL'} ${previewShares} SHARES`
+                    : tradeType === 'BUY' ? 'BUY' : 'SELL'}
+                </Text>
+            }
           </TouchableOpacity>
         </View>
+
+        {/* Challenge a Friend */}
+        <TouchableOpacity
+          style={styles.challengeSection}
+          onPress={() => router.push('/(tabs)/friends')}
+        >
+          <View style={styles.challengeLeft}>
+            <Text style={styles.challengeIcon}>🎯</Text>
+            <View>
+              <Text style={styles.challengeTitle}>Challenge a Friend</Text>
+              <Text style={styles.challengeSubtitle}>Bet against a friend on this market</Text>
+            </View>
+          </View>
+          <Text style={styles.challengeArrow}>›</Text>
+        </TouchableOpacity>
 
         {/* Disclaimer */}
         <View style={styles.disclaimer}>
           <Text style={styles.disclaimerText}>
-            ⚠️ Credits have no real-world value. This is not gambling.
+            Credits have no real-world value. This is not gambling.
           </Text>
         </View>
+
+        {/* Order Book */}
+        <OrderBook yesOrders={orderBook.yes} noOrders={orderBook.no} />
+
+        {/* Related News */}
+        <NewsLinks marketId={market.id} news={news} />
+
+        {/* Comments Section */}
+        <Comments
+          marketId={market.id}
+          comments={comments}
+          onAddComment={handleAddComment}
+          onLikeComment={handleLikeComment}
+        />
       </ScrollView>
     </View>
   );
@@ -258,6 +493,10 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   probabilitySection: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  volumeSection: {
     padding: 16,
     paddingTop: 0,
   },
@@ -367,14 +606,14 @@ const styles = StyleSheet.create({
   },
   outcomesContainer: {
     flexDirection: 'row',
-    gap: 12,
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 12,
   },
   outcomeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    width: '48%',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     backgroundColor: Colors.background,
     borderRadius: 12,
     padding: 12,
@@ -384,21 +623,28 @@ const styles = StyleSheet.create({
   outcomeButtonSelected: {
     backgroundColor: Colors.surfaceHighlight,
   },
+  outcomeButtonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   outcomeDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
+    flexShrink: 0,
   },
   outcomeName: {
     color: Colors.textPrimary,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
-    flex: 1,
-    marginLeft: 8,
+    marginLeft: 6,
+    flexShrink: 1,
   },
   outcomePrice: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '700',
+    marginLeft: 16,
   },
   quantityInput: {
     backgroundColor: Colors.background,
@@ -449,6 +695,20 @@ const styles = StyleSheet.create({
   costValuePositive: {
     color: Colors.primary,
   },
+  payoutRow: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingTop: 8,
+    marginTop: 4,
+  },
+  payoutLabel: {
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  payoutValue: {
+    color: Colors.primary,
+    fontWeight: '700',
+  },
   executeButton: {
     borderRadius: 12,
     paddingVertical: 16,
@@ -475,5 +735,64 @@ const styles = StyleSheet.create({
   disclaimerText: {
     color: Colors.textMuted,
     fontSize: 12,
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    marginTop: 12,
+  },
+  errorText: {
+    color: Colors.danger,
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  retryButtonText: {
+    color: Colors.textPrimary,
+    fontWeight: '600',
+  },
+  challengeSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surface,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 16,
+    padding: 16,
+  },
+  challengeLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  challengeIcon: {
+    fontSize: 28,
+  },
+  challengeTitle: {
+    color: Colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  challengeSubtitle: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  challengeArrow: {
+    fontSize: 28,
+    color: Colors.primary,
+    fontWeight: '600',
   },
 });

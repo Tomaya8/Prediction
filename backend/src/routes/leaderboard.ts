@@ -8,6 +8,7 @@ import { PrismaClient, LeaderboardPeriod, ScoreType } from '@prisma/client';
 
 const router = Router();
 const prisma = new PrismaClient();
+const getUser = (req: Request) => (req as any).user as { id: string; isAdmin?: boolean } | undefined;
 
 // ============================================
 // LEADERBOARD ENDPOINTS
@@ -47,26 +48,25 @@ router.get('/', async (req: Request, res: Response) => {
         },
         orderBy: { rank: 'asc' },
         take: parseInt(limit as string),
-        include: {
-          user: {
-            select: {
-              id: true,
-              displayName: true,
-              avatarUrl: true
-            }
-          }
-        }
       });
+
+      const userIds = snapshots.map(s => s.userId);
+      const users = await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, displayName: true, avatarUrl: true }
+      });
+      const userMap = Object.fromEntries(users.map(u => [u.id, u]));
 
       leaderboard = snapshots.map(s => ({
         rank: s.rank,
         userId: s.userId,
-        displayName: s.user.displayName,
-        avatarUrl: s.user.avatarUrl,
+        displayName: userMap[s.userId]?.displayName,
+        avatarUrl: userMap[s.userId]?.avatarUrl,
         score: s.score
       }));
     } else {
-      // Calculate live leaderboard
+      // Calculate live leaderboard using DB-level sort + pagination
+      const take = Math.min(parseInt(limit as string) || 50, 100);
       const users = await prisma.user.findMany({
         select: {
           id: true,
@@ -75,39 +75,27 @@ router.get('/', async (req: Request, res: Response) => {
           creditBalance: true,
           roi: true,
           totalTrades: true,
-          winningTrades: true
-        }
+          winningTrades: true,
+        },
+        orderBy: scoreType === 'ROI' ? { roi: 'desc' } : { creditBalance: 'desc' },
+        take,
       });
 
-      // Sort by score type
-      const sortedUsers = users
-        .map(u => ({
-          ...u,
-          winRate: u.totalTrades > 0 ? (u.winningTrades / u.totalTrades) * 100 : 0
-        }))
-        .sort((a, b) => {
-          if (scoreType === 'ROI') {
-            return b.roi - a.roi;
-          }
-          return b.creditBalance - a.creditBalance;
-        })
-        .slice(0, parseInt(limit as string));
-
-      leaderboard = sortedUsers.map((u, index) => ({
+      leaderboard = users.map((u, index) => ({
         rank: index + 1,
         userId: u.id,
         displayName: u.displayName || 'Anonymous',
         avatarUrl: u.avatarUrl,
         score: scoreType === 'ROI' ? u.roi : u.creditBalance,
-        winRate: u.winRate,
-        totalTrades: u.totalTrades
+        winRate: u.totalTrades > 0 ? Math.round((u.winningTrades / u.totalTrades) * 100) : 0,
+        totalTrades: u.totalTrades,
       }));
     }
 
     // Get current user's rank if authenticated
     let userRank = null;
-    if (req.user?.id) {
-      const userEntry = leaderboard.find((l: any) => l.userId === req.user?.id);
+    if (getUser(req)?.id) {
+      const userEntry = leaderboard.find((l: any) => l.userId === getUser(req)?.id);
       if (userEntry) {
         userRank = userEntry.rank;
       }
@@ -137,7 +125,7 @@ router.get('/', async (req: Request, res: Response) => {
  */
 router.get('/me', async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = getUser(req)?.id;
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -215,9 +203,9 @@ router.get('/achievements', async (req: Request, res: Response) => {
 
     // Get user's earned achievements if authenticated
     let userAchievements: string[] = [];
-    if (req.user?.id) {
+    if (getUser(req)?.id) {
       const userAchievementsData = await prisma.userAchievement.findMany({
-        where: { userId: req.user.id },
+        where: { userId: getUser(req)!.id },
         select: { achievementId: true }
       });
       userAchievements = userAchievementsData.map(a => a.achievementId);
@@ -254,7 +242,7 @@ router.get('/achievements', async (req: Request, res: Response) => {
  */
 router.get('/achievements/me', async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = getUser(req)?.id;
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -306,7 +294,7 @@ router.get('/achievements/me', async (req: Request, res: Response) => {
 router.post('/refresh', async (req: Request, res: Response) => {
   try {
     // Check admin permission
-    if (!req.user?.isAdmin) {
+    if (!getUser(req)?.isAdmin) {
       return res.status(403).json({
         success: false,
         error: 'Admin access required'

@@ -1,120 +1,190 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  ActivityIndicator, RefreshControl,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../lib/colors';
+import { apiClient } from '../../lib/api-client';
 
-// Mock leaderboard data
-const MOCK_LEADERBOARD = {
-  topThree: [
-    { rank: 1, name: 'CryptoKing', credits: 52000, avatar: '👑' },
-    { rank: 2, name: 'PoliticalPundit', credits: 48500, avatar: '🎯' },
-    { rank: 3, name: 'SportsBettor', credits: 45200, avatar: '⚽' },
-  ],
-  rest: [
-    { rank: 4, name: 'Entertainer', credits: 42000, avatar: '🎬' },
-    { rank: 5, name: 'ScienceGuy', credits: 38500, avatar: '🔬' },
-    { rank: 6, name: 'MarketMaker', credits: 35200, avatar: '📈' },
-    { rank: 7, name: 'PredictionPro', credits: 31000, avatar: '🎯' },
-    { rank: 8, name: 'TrendFollower', credits: 28500, avatar: '📊' },
-  ],
-  user: {
-    rank: 47,
-    name: 'You',
-    credits: 1000,
-    avatar: '👤',
-  },
-};
+interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  displayName: string;
+  avatarUrl?: string;
+  score: number;
+  winRate?: number;
+  totalTrades?: number;
+  isCurrentUser?: boolean;
+}
+
+type ScoreType = 'credits' | 'roi';
 
 export default function LeaderboardScreen() {
-  const [period, setPeriod] = useState('ALL_TIME');
-  const [scoreType, setScoreType] = useState('CREDITS');
-  const [leaderboard] = useState(MOCK_LEADERBOARD);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [scoreType, setScoreType] = useState<ScoreType>('credits');
+  const [userRank, setUserRank] = useState<number | null>(null);
 
-  const periods = ['Daily', 'Weekly', 'All Time'];
-  const scoreTypes = ['Credits', 'ROI'];
-
-  const getRankEmoji = (rank: number) => {
-    switch (rank) {
-      case 1: return '🥇';
-      case 2: return '🥈';
-      case 3: return '🥉';
-      default: return `#${rank}`;
+  const fetchLeaderboard = useCallback(async () => {
+    try {
+      const res = await apiClient.getLeaderboard(scoreType);
+      if (res.success && res.data) {
+        const data = res.data as any;
+        setLeaderboard(data.leaderboard ?? data);
+        setUserRank(data.userRank ?? null);
+        setError(null);
+      } else {
+        setError(res.error ?? 'Failed to load leaderboard');
+      }
+    } catch {
+      setError('Failed to load leaderboard');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
+  }, [scoreType]);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchLeaderboard();
+  }, [fetchLeaderboard]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchLeaderboard();
   };
+
+  const formatScore = (score: number) => {
+    if (scoreType === 'roi') return `${score.toFixed(1)}%`;
+    if (score >= 1000) return `${(score / 1000).toFixed(1)}K`;
+    return score.toLocaleString();
+  };
+
+  const getRankColor = (rank: number) => {
+    if (rank === 1) return '#FFD700';
+    if (rank === 2) return '#C0C0C0';
+    if (rank === 3) return '#CD7F32';
+    return Colors.textSecondary;
+  };
+
+  const getRankIcon = (rank: number): string => {
+    if (rank === 1) return 'trophy';
+    if (rank === 2) return 'medal-outline';
+    if (rank === 3) return 'ribbon-outline';
+    return '';
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity onPress={() => { setLoading(true); fetchLeaderboard(); }} style={styles.retryButton}>
+          <Text style={styles.retryText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* Tab Selector */}
-      <View style={styles.tabContainer}>
-        <View style={styles.periodTabs}>
-          {periods.map((p) => (
-            <TouchableOpacity
-              key={p}
-              style={[styles.tab, period === p && styles.tabActive]}
-              onPress={() => setPeriod(p.toUpperCase().replace(' ', '_'))}
-            >
-              <Text style={[styles.tabText, period === p && styles.tabTextActive]}>
-                {p}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+      {/* Score type toggle */}
+      <View style={styles.toggleContainer}>
+        <TouchableOpacity
+          style={[styles.toggleButton, scoreType === 'credits' && styles.toggleActive]}
+          onPress={() => setScoreType('credits')}
+        >
+          <Ionicons name="diamond-outline" size={16} color={scoreType === 'credits' ? '#fff' : Colors.textSecondary} />
+          <Text style={[styles.toggleText, scoreType === 'credits' && styles.toggleTextActive]}>Credits</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.toggleButton, scoreType === 'roi' && styles.toggleActive]}
+          onPress={() => setScoreType('roi')}
+        >
+          <Ionicons name="trending-up-outline" size={16} color={scoreType === 'roi' ? '#fff' : Colors.textSecondary} />
+          <Text style={[styles.toggleText, scoreType === 'roi' && styles.toggleTextActive]}>ROI</Text>
+        </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content}>
-        {/* Top 3 Podium */}
-        <View style={styles.podium}>
-          {/* 2nd Place */}
-          <View style={[styles.podiumItem, styles.podiumSecond]}>
-            <Text style={styles.podiumAvatar}>{leaderboard.topThree[1].avatar}</Text>
-            <Text style={styles.podiumName}>{leaderboard.topThree[1].name}</Text>
-            <Text style={styles.podiumRank}>🥈</Text>
-            <Text style={styles.podiumCredits}>{leaderboard.topThree[1].credits.toLocaleString()}</Text>
-          </View>
-
-          {/* 1st Place */}
-          <View style={[styles.podiumItem, styles.podiumFirst]}>
-            <Text style={styles.podiumAvatar}>{leaderboard.topThree[0].avatar}</Text>
-            <Text style={styles.podiumName}>{leaderboard.topThree[0].name}</Text>
-            <Text style={styles.podiumRank}>🥇</Text>
-            <Text style={styles.podiumCredits}>{leaderboard.topThree[0].credits.toLocaleString()}</Text>
-          </View>
-
-          {/* 3rd Place */}
-          <View style={[styles.podiumItem, styles.podiumThird]}>
-            <Text style={styles.podiumAvatar}>{leaderboard.topThree[2].avatar}</Text>
-            <Text style={styles.podiumName}>{leaderboard.topThree[2].name}</Text>
-            <Text style={styles.podiumRank}>🥉</Text>
-            <Text style={styles.podiumCredits}>{leaderboard.topThree[2].credits.toLocaleString()}</Text>
-          </View>
+      {/* User rank banner */}
+      {userRank != null && (
+        <View style={styles.userRankBanner}>
+          <Text style={styles.userRankLabel}>Your Rank</Text>
+          <Text style={styles.userRankValue}>#{userRank}</Text>
         </View>
+      )}
 
-        {/* Rest of Leaderboard */}
-        <View style={styles.listContainer}>
-          {leaderboard.rest.map((user) => (
-            <View key={user.rank} style={styles.listItem}>
-              <Text style={styles.listRank}>{user.rank}</Text>
-              <Text style={styles.listAvatar}>{user.avatar}</Text>
-              <Text style={styles.listName}>{user.name}</Text>
-              <Text style={styles.listCredits}>{user.credits.toLocaleString()}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* User's Rank */}
-        <View style={styles.userSection}>
-          <Text style={styles.userSectionTitle}>Your Rank</Text>
-          <View style={styles.userCard}>
-            <Text style={styles.listRank}>{leaderboard.user.rank}</Text>
-            <Text style={styles.listAvatar}>{leaderboard.user.avatar}</Text>
-            <Text style={styles.listName}>{leaderboard.user.name}</Text>
-            <Text style={styles.listCredits}>{leaderboard.user.credits.toLocaleString()}</Text>
+      {/* Leaderboard list */}
+      <ScrollView
+        style={styles.list}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
+      >
+        {leaderboard.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>🏆</Text>
+            <Text style={styles.emptyText}>No rankings yet</Text>
+            <Text style={styles.emptySubtext}>Start trading to appear on the leaderboard</Text>
           </View>
-        </View>
+        ) : (
+          leaderboard.map((entry) => {
+            const rankIcon = getRankIcon(entry.rank);
+            return (
+              <View
+                key={entry.userId}
+                style={[styles.entryCard, entry.isCurrentUser && styles.currentUserCard]}
+              >
+                {/* Rank */}
+                <View style={styles.rankContainer}>
+                  {rankIcon ? (
+                    <Ionicons name={rankIcon as any} size={22} color={getRankColor(entry.rank)} />
+                  ) : (
+                    <Text style={[styles.rankText, { color: getRankColor(entry.rank) }]}>
+                      {entry.rank}
+                    </Text>
+                  )}
+                </View>
 
-        {/* Disclaimer */}
+                {/* Avatar */}
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>
+                    {(entry.displayName || 'A').charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+
+                {/* User info */}
+                <View style={styles.userInfo}>
+                  <Text style={styles.userName} numberOfLines={1}>
+                    {entry.displayName || 'Anonymous'}
+                    {entry.isCurrentUser ? ' (You)' : ''}
+                  </Text>
+                  {entry.totalTrades != null && (
+                    <Text style={styles.userStats}>
+                      {entry.totalTrades} trades
+                      {entry.winRate != null ? ` · ${entry.winRate.toFixed(0)}% win` : ''}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Score */}
+                <Text style={styles.scoreText}>{formatScore(entry.score)}</Text>
+              </View>
+            );
+          })
+        )}
+
         <View style={styles.disclaimer}>
           <Text style={styles.disclaimerText}>
-            ⚠️ Credits have no real-world value. This is not gambling.
+            Credits have no real-world value. This is not gambling.
           </Text>
         </View>
       </ScrollView>
@@ -127,129 +197,150 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  tabContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  centered: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  periodTabs: {
+  errorText: {
+    color: Colors.danger,
+    fontSize: 15,
+    marginBottom: 12,
+  },
+  retryButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  retryText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  toggleContainer: {
     flexDirection: 'row',
+    margin: 16,
     backgroundColor: Colors.surface,
     borderRadius: 12,
     padding: 4,
   },
-  tab: {
+  toggleButton: {
     flex: 1,
-    paddingVertical: 10,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
     borderRadius: 10,
+    gap: 6,
   },
-  tabActive: {
+  toggleActive: {
     backgroundColor: Colors.primary,
   },
-  tabText: {
+  toggleText: {
     color: Colors.textSecondary,
     fontSize: 14,
     fontWeight: '600',
   },
-  tabTextActive: {
-    color: Colors.textPrimary,
+  toggleTextActive: {
+    color: '#fff',
   },
-  content: {
-    flex: 1,
-  },
-  podium: {
+  userRankBanner: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-  },
-  podiumItem: {
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.primary,
+  },
+  userRankLabel: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+  },
+  userRankValue: {
+    color: Colors.primary,
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  list: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  emptyState: {
+    alignItems: 'center',
+    padding: 32,
     backgroundColor: Colors.surface,
     borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 4,
   },
-  podiumFirst: {
-    paddingBottom: 24,
-    borderWidth: 2,
-    borderColor: '#FFD700',
+  emptyIcon: {
+    fontSize: 40,
+    marginBottom: 12,
   },
-  podiumSecond: {
-    paddingBottom: 16,
-  },
-  podiumThird: {
-    paddingBottom: 12,
-  },
-  podiumAvatar: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
-  podiumName: {
+  emptyText: {
     color: Colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  podiumRank: {
-    fontSize: 20,
-    marginBottom: 4,
-  },
-  podiumCredits: {
-    color: Colors.primary,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
   },
-  listContainer: {
-    paddingHorizontal: 16,
+  emptySubtext: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    marginTop: 4,
   },
-  listItem: {
+  entryCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
     marginBottom: 8,
+    gap: 12,
   },
-  listRank: {
-    color: Colors.textSecondary,
-    fontSize: 16,
-    fontWeight: '600',
+  currentUserCard: {
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  rankContainer: {
     width: 30,
+    alignItems: 'center',
   },
-  listAvatar: {
-    fontSize: 24,
-    marginRight: 12,
-  },
-  listName: {
-    color: Colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '500',
-    flex: 1,
-  },
-  listCredits: {
-    color: Colors.primary,
+  rankText: {
     fontSize: 16,
     fontWeight: '700',
   },
-  userSection: {
-    padding: 16,
-  },
-  userSectionTitle: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  userCard: {
-    flexDirection: 'row',
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.surfaceHighlight,
     alignItems: 'center',
-    backgroundColor: Colors.primary + '20',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.primary,
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userName: {
+    color: Colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  userStats: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  scoreText: {
+    color: Colors.primary,
+    fontSize: 16,
+    fontWeight: '700',
   },
   disclaimer: {
     paddingVertical: 20,

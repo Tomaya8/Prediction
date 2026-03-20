@@ -2,7 +2,11 @@
 // Replace values with your actual Firebase project credentials
 
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { initializeAuth, getAuth } = require('firebase/auth');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { getReactNativePersistence } = require('firebase/auth');
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirestore } from 'firebase/firestore';
 
 // Firebase configuration - UPDATE THESE VALUES
@@ -21,8 +25,17 @@ const firebaseConfig = {
 // Initialize Firebase only once
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
-// Export Firebase services
-export const auth = getAuth(app);
+// Initialize Auth with AsyncStorage persistence so session survives app restarts
+// getReactNativePersistence is available at runtime via Metro's RN bundle (dist/rn/index.js)
+let auth: ReturnType<typeof getAuth>;
+try {
+  auth = initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
+} catch {
+  // Already initialized (e.g. hot reload) — reuse existing instance
+  auth = getAuth(app);
+}
+export { auth };
+
 export const db = getFirestore(app);
 
 export default app;

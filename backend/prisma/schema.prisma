@@ -42,8 +42,19 @@ model User {
   isPremium         Boolean   @default(false)
   premiumExpiresAt  DateTime?
 
+  // Admin / moderation flags
+  isAdmin           Boolean   @default(false)
+  isBanned          Boolean   @default(false)
+
+  // Referral system
+  referralCode      String?   @unique
+  referralCount     Int       @default(0)
+
   // Firebase UID for authentication
   firebaseUid       String    @unique
+
+  // Native auth password hash (used when Firebase is not configured)
+  passwordHash      String?
 
   // Relations
   holdings          Holding[]
@@ -53,6 +64,9 @@ model User {
   followers         Follow[]  @relation("following")
   following         Follow[]  @relation("follower")
   comments          Comment[]
+  tournaments       TournamentParticipant[]
+  challengesCreated FriendChallenge[] @relation("challenger")
+  challengesReceived FriendChallenge[] @relation("challenged")
 
   @@index([email])
   @@index([firebaseUid])
@@ -136,6 +150,7 @@ model Market {
   outcomes       Outcome[]
   trades         Trade[]
   comments       Comment[]
+  holdings       Holding[]
 
   @@index([category])
   @@index([status])
@@ -300,10 +315,11 @@ model Comment {
   userId      String
   marketId    String
   content     String
-  
+  likes       Int      @default(0)
+
   // Replies
   parentId    String?
-  
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -387,4 +403,91 @@ model AuditLog {
   @@index([action])
   @@index([entityType, entityId])
   @@index([createdAt])
+}
+
+// ============================================
+// TOURNAMENTS
+// ============================================
+
+model Tournament {
+  id              String              @id @default(cuid())
+  name            String
+  description     String?
+  type            TournamentType
+  status          TournamentStatus    @default(UPCOMING)
+  entryFee        Int                 @default(0)
+  prizePool       Int                 @default(0)
+  maxParticipants Int                 @default(500)
+  startsAt        DateTime
+  endsAt          DateTime
+  createdAt       DateTime            @default(now())
+
+  // Prize distribution (JSON: { first, second, third })
+  prizes          Json?
+
+  participants    TournamentParticipant[]
+
+  @@index([status])
+  @@index([startsAt])
+}
+
+model TournamentParticipant {
+  id            String     @id @default(cuid())
+  tournamentId  String
+  userId        String
+  joinedAt      DateTime   @default(now())
+  pnl           Float      @default(0.0) // Profit & Loss during tournament
+
+  tournament    Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user          User       @relation(fields: [userId], references: [id])
+
+  @@unique([tournamentId, userId])
+  @@index([tournamentId])
+  @@index([userId])
+}
+
+enum TournamentType {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum TournamentStatus {
+  UPCOMING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+// ============================================
+// FRIEND CHALLENGES
+// ============================================
+
+model FriendChallenge {
+  id                   String          @id @default(cuid())
+  challengerId         String
+  challengedId         String
+  marketId             String
+  challengerOutcomeId  String
+  challengedOutcomeId  String?         // Set when challenged user accepts
+  amount               Int             // Credits wagered
+  escrowCredits        Int             @default(0)
+  status               ChallengeStatus @default(PENDING)
+  winnerId             String?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  challenger           User            @relation("challenger", fields: [challengerId], references: [id])
+  challenged           User            @relation("challenged", fields: [challengedId], references: [id])
+
+  @@index([challengerId])
+  @@index([challengedId])
+  @@index([status])
+}
+
+enum ChallengeStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  COMPLETED
 }

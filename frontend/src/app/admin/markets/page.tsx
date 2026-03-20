@@ -1,20 +1,28 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Plus, Search, MoreVertical, Check, X, Edit, Trash2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, Search, Check, X } from 'lucide-react';
+import { api } from '../../../lib/api-client';
 
 interface Market {
   id: string;
   title: string;
   category: string;
-  status: 'open' | 'resolved' | 'cancelled';
+  status: string;
   totalVolume: number;
-  outcomes: { id: string; name: string; price: number }[];
+  outcomes: { id: string; name: string; currentPrice?: number }[];
   expiresAt: string;
   createdAt: string;
 }
 
-const categories = ['All', 'Politics', 'Sports', 'Crypto', 'Entertainment', 'Science'];
+interface CreateForm {
+  title: string;
+  description: string;
+  category: string;
+  expiresAt: string;
+}
+
+const categories = ['All', 'POLITICS', 'SPORTS', 'CRYPTO', 'ENTERTAINMENT', 'SCIENCE'];
 
 export default function MarketsPage() {
   const [markets, setMarkets] = useState<Market[]>([]);
@@ -22,27 +30,62 @@ export default function MarketsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState<CreateForm>({ title: '', description: '', category: 'CRYPTO', expiresAt: '' });
+  const [creating, setCreating] = useState(false);
+  const [resolveModal, setResolveModal] = useState<Market | null>(null);
 
-  useEffect(() => {
-    // Simulated data - replace with actual Firebase queries
-    const fetchMarkets = async () => {
-      setMarkets([
-        { id: '1', title: 'Will Bitcoin exceed $100k by Dec 2024?', category: 'Crypto', status: 'open', totalVolume: 25000, outcomes: [{ id: 'yes', name: 'Yes', price: 0.65 }, { id: 'no', name: 'No', price: 0.35 }], expiresAt: '2024-12-31', createdAt: '2024-01-15' },
-        { id: '2', title: 'Will Trump win the 2024 Presidential Election?', category: 'Politics', status: 'open', totalVolume: 52000, outcomes: [{ id: 'yes', name: 'Yes', price: 0.52 }, { id: 'no', name: 'No', price: 0.48 }], expiresAt: '2024-11-05', createdAt: '2024-01-20' },
-        { id: '3', title: 'Will ETH hit $5k in 2024?', category: 'Crypto', status: 'open', totalVolume: 18000, outcomes: [{ id: 'yes', name: 'Yes', price: 0.42 }, { id: 'no', name: 'No', price: 0.58 }], expiresAt: '2024-12-31', createdAt: '2024-02-01' },
-        { id: '4', title: 'Will Taylor Swift announce retirement?', category: 'Entertainment', status: 'resolved', totalVolume: 8500, outcomes: [{ id: 'yes', name: 'Yes', price: 0.15 }, { id: 'no', name: 'No', price: 0.85 }], expiresAt: '2024-12-31', createdAt: '2024-01-10' },
-        { id: '5', title: 'Will SpaceX land on Mars by 2025?', category: 'Science', status: 'open', totalVolume: 12000, outcomes: [{ id: 'yes', name: 'Yes', price: 0.25 }, { id: 'no', name: 'No', price: 0.75 }], expiresAt: '2025-12-31', createdAt: '2024-02-10' },
-      ]);
+  const fetchMarkets = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params: Record<string, string> = {};
+      if (categoryFilter !== 'All') params.category = categoryFilter;
+      const res = await api.getMarkets(params);
+      if (res.success && res.data) setMarkets(res.data);
+    } catch (err) {
+      console.error('Failed to fetch markets:', err);
+    } finally {
       setLoading(false);
-    };
-    fetchMarkets();
-  }, []);
+    }
+  }, [categoryFilter]);
 
-  const filteredMarkets = markets.filter(market => {
-    const matchesSearch = market.title.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = categoryFilter === 'All' || market.category === categoryFilter;
-    return matchesSearch && matchesCategory;
-  });
+  useEffect(() => { fetchMarkets(); }, [fetchMarkets]);
+
+  const handleCreateMarket = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createForm.title || !createForm.expiresAt) return;
+    setCreating(true);
+    const res = await api.createMarket({
+      ...createForm,
+      outcomes: [{ name: 'Yes' }, { name: 'No' }],
+    });
+    setCreating(false);
+    if (res.success) {
+      setShowCreateModal(false);
+      setCreateForm({ title: '', description: '', category: 'CRYPTO', expiresAt: '' });
+      fetchMarkets();
+    } else {
+      alert(res.error || 'Failed to create market');
+    }
+  };
+
+  const handleResolve = async (outcomeId: string) => {
+    if (!resolveModal) return;
+    const res = await api.resolveMarket(resolveModal.id, outcomeId);
+    if (res.success) {
+      setResolveModal(null);
+      fetchMarkets();
+    } else {
+      alert(res.error || 'Failed to resolve market');
+    }
+  };
+
+  const handleCancel = async (market: Market) => {
+    if (!window.confirm(`Cancel market "${market.title}"?`)) return;
+    const res = await api.cancelMarket(market.id);
+    if (res.success) fetchMarkets();
+    else alert(res.error || 'Failed to cancel market');
+  };
+
 
   const getStatusBadge = (status: string) => {
     const styles = {
@@ -99,62 +142,62 @@ export default function MarketsPage() {
 
       {/* Markets Grid */}
       <div className="grid grid-cols-1 gap-4">
-        {filteredMarkets.map((market) => (
+        {markets.filter(m => {
+          const matchesSearch = m.title.toLowerCase().includes(searchTerm.toLowerCase());
+          const matchesCategory = categoryFilter === 'All' || m.category === categoryFilter;
+          return matchesSearch && matchesCategory;
+        }).map((market) => (
           <div key={market.id} className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow">
             <div className="flex justify-between items-start mb-3">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">{market.title}</h3>
                 <p className="text-sm text-gray-500 mt-1">Category: {market.category}</p>
               </div>
-              <div className="flex items-center gap-2">
-                {getStatusBadge(market.status)}
-                <button className="text-gray-400 hover:text-gray-600">
-                  <MoreVertical size={20} />
-                </button>
-              </div>
+              {getStatusBadge(market.status)}
             </div>
-            
+
             <div className="mt-4">
               <p className="text-sm text-gray-500 mb-2">Outcomes:</p>
               <div className="flex gap-4">
-                {market.outcomes.map((outcome) => (
-                  <div key={outcome.id} className="flex-1 bg-gray-50 rounded-lg p-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-gray-900">{outcome.name}</span>
-                      <span className="text-sm text-gray-600">{(outcome.price * 100).toFixed(0)}%</span>
+                {market.outcomes.map((outcome) => {
+                  const price = outcome.currentPrice ?? 0;
+                  return (
+                    <div key={outcome.id} className="flex-1 bg-gray-50 rounded-lg p-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-900">{outcome.name}</span>
+                        <span className="text-sm text-gray-600">{(price * 100).toFixed(0)}%</span>
+                      </div>
+                      <div className="mt-1 bg-gray-200 rounded-full h-2">
+                        <div className="bg-indigo-600 h-2 rounded-full" style={{ width: `${price * 100}%` }} />
+                      </div>
                     </div>
-                    <div className="mt-1 bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-indigo-600 h-2 rounded-full" 
-                        style={{ width: `${outcome.price * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
             <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-100">
               <span className="text-sm text-gray-500">
-                Volume: <span className="font-semibold text-gray-900">${market.totalVolume.toLocaleString()}</span>
+                Volume: <span className="font-semibold text-gray-900">{market.totalVolume.toLocaleString()} credits</span>
               </span>
               <span className="text-sm text-gray-500">
-                Expires: {market.expiresAt}
+                Expires: {market.expiresAt ? new Date(market.expiresAt).toLocaleDateString() : '—'}
               </span>
             </div>
 
-            {/* Actions for open markets */}
-            {market.status === 'open' && (
+            {market.status === 'ACTIVE' && (
               <div className="flex gap-2 mt-4">
-                <button className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800">
-                  <Edit size={16} />
-                  Edit
-                </button>
-                <button className="flex items-center gap-1 text-sm text-green-600 hover:text-green-800">
+                <button
+                  onClick={() => setResolveModal(market)}
+                  className="flex items-center gap-1 text-sm text-green-600 hover:text-green-800"
+                >
                   <Check size={16} />
                   Resolve
                 </button>
-                <button className="flex items-center gap-1 text-sm text-red-600 hover:text-red-800">
+                <button
+                  onClick={() => handleCancel(market)}
+                  className="flex items-center gap-1 text-sm text-red-600 hover:text-red-800"
+                >
                   <X size={16} />
                   Cancel
                 </button>
@@ -169,18 +212,25 @@ export default function MarketsPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-lg">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Create New Market</h2>
-            <form className="space-y-4">
+            <form onSubmit={handleCreateMarket} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
                 <input
                   type="text"
+                  required
+                  value={createForm.title}
+                  onChange={(e) => setCreateForm(f => ({ ...f, title: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="Will Bitcoin exceed $100k?"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <select
+                  value={createForm.category}
+                  onChange={(e) => setCreateForm(f => ({ ...f, category: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
                   {categories.slice(1).map(cat => (
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
@@ -189,6 +239,8 @@ export default function MarketsPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <textarea
+                  value={createForm.description}
+                  onChange={(e) => setCreateForm(f => ({ ...f, description: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   rows={3}
                   placeholder="Describe the market resolution criteria..."
@@ -198,9 +250,13 @@ export default function MarketsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Expiration Date</label>
                 <input
                   type="date"
+                  required
+                  value={createForm.expiresAt}
+                  onChange={(e) => setCreateForm(f => ({ ...f, expiresAt: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
+              <p className="text-sm text-gray-500">Outcomes: Yes / No (default binary market)</p>
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
@@ -211,12 +267,41 @@ export default function MarketsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                  disabled={creating}
+                  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
                 >
-                  Create Market
+                  {creating ? 'Creating...' : 'Create Market'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Resolve Modal */}
+      {resolveModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Resolve Market</h2>
+            <p className="text-sm text-gray-600 mb-4">{resolveModal.title}</p>
+            <p className="text-sm font-medium text-gray-700 mb-3">Select winning outcome:</p>
+            <div className="space-y-2">
+              {resolveModal.outcomes.map((outcome) => (
+                <button
+                  key={outcome.id}
+                  onClick={() => handleResolve(outcome.id)}
+                  className="w-full text-left px-4 py-3 border border-gray-200 rounded-lg hover:bg-green-50 hover:border-green-400 text-sm font-medium"
+                >
+                  {outcome.name}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setResolveModal(null)}
+              className="mt-4 w-full text-gray-500 hover:text-gray-700 text-sm"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}

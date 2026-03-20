@@ -3,7 +3,7 @@
  * HTTP client for communicating with the backend API
  */
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -238,6 +238,58 @@ class ApiClient {
     return this.request('/auth/verify', {
       method: 'POST',
       body: JSON.stringify({ token: firebaseToken }),
+    });
+  }
+
+  // ============================================
+  // ADMIN
+  // ============================================
+
+  async getAdminStats(): Promise<ApiResponse<any>> {
+    return this.request('/admin/stats');
+  }
+
+  async getAdminUsers(search?: string): Promise<ApiResponse<any>> {
+    const query = search ? `?search=${encodeURIComponent(search)}` : '';
+    return this.request(`/admin/users${query}`);
+  }
+
+  async addCredits(userId: string, amount: number, reason?: string): Promise<ApiResponse<any>> {
+    return this.request(`/admin/users/${userId}/credits`, {
+      method: 'POST',
+      body: JSON.stringify({ amount, reason }),
+    });
+  }
+
+  async banUser(userId: string): Promise<ApiResponse<any>> {
+    return this.request(`/admin/users/${userId}/ban`, {
+      method: 'POST',
+    });
+  }
+
+  async createMarket(data: {
+    title: string;
+    description: string;
+    category: string;
+    expiresAt: string;
+    outcomes: { name: string }[];
+  }): Promise<ApiResponse<any>> {
+    return this.request('/markets', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async resolveMarket(id: string, outcomeId: string): Promise<ApiResponse<any>> {
+    return this.request(`/markets/${id}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ outcomeId }),
+    });
+  }
+
+  async cancelMarket(id: string): Promise<ApiResponse<any>> {
+    return this.request(`/markets/${id}/cancel`, {
+      method: 'POST',
     });
   }
 }

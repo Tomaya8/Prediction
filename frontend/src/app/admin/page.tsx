@@ -5,6 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line
 } from 'recharts';
 import { Users, TrendingUp, DollarSign, Activity } from 'lucide-react';
+import { api } from '../../lib/api-client';
 
 interface Stats {
   totalUsers: number;
@@ -28,35 +29,22 @@ export default function DashboardPage() {
   });
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Fetch data from Firebase Firestore
     const fetchData = async () => {
       try {
-        // In production, import and use Firebase Admin SDK or client SDK
-        // For now, using mock data - replace with actual Firestore queries
-        
-        // Example Firestore query structure:
-        // const usersSnapshot = await getDocs(collection(db, 'users'));
-        // const marketsSnapshot = await getDocs(collection(db, 'markets'));
-        
-        setStats({
-          totalUsers: 1250,
-          activeUsers: 342,
-          totalMarkets: 48,
-          totalVolume: 2500000,
-        });
-        setChartData([
-          { name: 'Mon', users: 120, volume: 45000 },
-          { name: 'Tue', users: 145, volume: 52000 },
-          { name: 'Wed', users: 132, volume: 48000 },
-          { name: 'Thu', users: 168, volume: 61000 },
-          { name: 'Fri', users: 195, volume: 75000 },
-          { name: 'Sat', users: 210, volume: 82000 },
-          { name: 'Sun', users: 188, volume: 69000 },
-        ]);
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
+        const res = await api.getAdminStats();
+        if (res.success && res.data) {
+          const { totalUsers, activeUsers, totalMarkets, totalVolume, dailyStats } = res.data;
+          setStats({ totalUsers, activeUsers, totalMarkets, totalVolume });
+          setChartData(dailyStats || []);
+        } else {
+          setError(res.error || 'Failed to load dashboard');
+        }
+      } catch (err) {
+        setError('Network error loading dashboard');
+        console.error('Error fetching dashboard data:', err);
       } finally {
         setLoading(false);
       }
@@ -65,7 +53,22 @@ export default function DashboardPage() {
   }, []);
 
   if (loading) {
-    return <div className="text-gray-500">Loading dashboard...</div>;
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-white p-6 rounded-lg shadow animate-pulse">
+              <div className="h-4 bg-gray-200 rounded w-24 mb-3" />
+              <div className="h-8 bg-gray-200 rounded w-16" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="text-red-500 p-4 bg-red-50 rounded-lg">{error}</div>;
   }
 
   return (

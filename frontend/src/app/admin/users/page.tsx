@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Search, MoreVertical, Ban, Award, CreditCard } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Search, MoreVertical, Ban, CreditCard } from 'lucide-react';
+import { api } from '../../../lib/api-client';
 
 interface User {
   id: string;
@@ -11,7 +12,7 @@ interface User {
   totalWinnings: number;
   totalTrades: number;
   createdAt: string;
-  lastActiveAt: string;
+  lastActiveDate: string;
 }
 
 export default function UsersPage() {
@@ -19,26 +20,59 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
-  useEffect(() => {
-    // Simulated data - replace with actual Firebase queries
-    const fetchUsers = async () => {
-      setUsers([
-        { id: '1', email: 'john@example.com', displayName: 'John Doe', creditBalance: 5000, totalWinnings: 15000, totalTrades: 45, createdAt: '2024-01-15', lastActiveAt: '2024-03-18' },
-        { id: '2', email: 'jane@example.com', displayName: 'Jane Smith', creditBalance: 8200, totalWinnings: 28000, totalTrades: 120, createdAt: '2024-01-20', lastActiveAt: '2024-03-17' },
-        { id: '3', email: 'bob@example.com', displayName: 'Bob Wilson', creditBalance: 1200, totalWinnings: 5000, totalTrades: 25, createdAt: '2024-02-01', lastActiveAt: '2024-03-15' },
-        { id: '4', email: 'alice@example.com', displayName: 'Alice Brown', creditBalance: 15000, totalWinnings: 45000, totalTrades: 200, createdAt: '2024-01-10', lastActiveAt: '2024-03-18' },
-        { id: '5', email: 'charlie@example.com', displayName: 'Charlie Davis', creditBalance: 3500, totalWinnings: 12000, totalTrades: 60, createdAt: '2024-02-10', lastActiveAt: '2024-03-16' },
-      ]);
+  const fetchUsers = useCallback(async (search?: string) => {
+    setLoading(true);
+    try {
+      const res = await api.getAdminUsers(search);
+      if (res.success && res.data) setUsers(res.data);
+    } catch (err) {
+      console.error('Failed to fetch users:', err);
+    } finally {
       setLoading(false);
-    };
-    fetchUsers();
+    }
   }, []);
 
-  const filteredUsers = users.filter(user => 
-    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.displayName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => { fetchUsers(); }, [fetchUsers]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => fetchUsers(searchTerm || undefined), 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm, fetchUsers]);
+
+  const handleAddCredits = async () => {
+    if (!selectedUser) return;
+    const amountStr = window.prompt(`Add/remove credits for ${selectedUser.displayName}:\n(Use negative number to remove credits)`);
+    if (!amountStr) return;
+    const amount = parseInt(amountStr);
+    if (isNaN(amount) || amount === 0) { alert('Invalid amount'); return; }
+    setActionLoading(true);
+    const res = await api.addCredits(selectedUser.id, amount);
+    setActionLoading(false);
+    if (res.success) {
+      alert(`Credits updated! New balance: ${res.data?.creditBalance?.toLocaleString()}`);
+      setSelectedUser(null);
+      fetchUsers(searchTerm || undefined);
+    } else {
+      alert(res.error || 'Failed to update credits');
+    }
+  };
+
+  const handleBanUser = async () => {
+    if (!selectedUser) return;
+    if (!window.confirm(`Ban ${selectedUser.displayName}? This will zero out their balance.`)) return;
+    setActionLoading(true);
+    const res = await api.banUser(selectedUser.id);
+    setActionLoading(false);
+    if (res.success) {
+      alert(`${selectedUser.displayName} has been banned.`);
+      setSelectedUser(null);
+      fetchUsers(searchTerm || undefined);
+    } else {
+      alert(res.error || 'Failed to ban user');
+    }
+  };
 
   if (loading) {
     return <div className="text-gray-500">Loading users...</div>;
@@ -74,7 +108,7 @@ export default function UsersPage() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredUsers.map((user) => (
+            {users.map((user: User) => (
               <tr key={user.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div>
@@ -98,7 +132,7 @@ export default function UsersPage() {
                   {user.createdAt}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {user.lastActiveAt}
+                  {user.lastActiveDate ? new Date(user.lastActiveDate).toLocaleDateString() : '—'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right">
                   <button 
@@ -138,11 +172,19 @@ export default function UsersPage() {
               </div>
             </div>
             <div className="mt-6 flex gap-3">
-              <button className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700">
+              <button
+                onClick={handleAddCredits}
+                disabled={actionLoading}
+                className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
                 <CreditCard size={16} />
                 Add Credits
               </button>
-              <button className="flex-1 flex items-center justify-center gap-2 bg-red-100 text-red-600 py-2 rounded-lg hover:bg-red-200">
+              <button
+                onClick={handleBanUser}
+                disabled={actionLoading}
+                className="flex-1 flex items-center justify-center gap-2 bg-red-100 text-red-600 py-2 rounded-lg hover:bg-red-200 disabled:opacity-50"
+              >
                 <Ban size={16} />
                 Ban User
               </button>

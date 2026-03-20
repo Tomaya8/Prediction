@@ -1,299 +1,476 @@
-import { Hono } from 'hono';
-import { getFirebaseAdmin } from '../lib/firebase-admin';
-import { calculateBuyCost, calculatePrice, calculateAllPrices, executeTrade } from '../lib/lmsr';
+/**
+ * Trades API Routes
+ * Handles trade execution, portfolio, and market-price endpoints via LMSR
+ */
 
-const trades = new Hono();
+import { Router, Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { calculateBuyCost, calculateAllPrices, calculatePrice, calculateSharesForCost } from '../lib/lmsr';
+import { authenticateUser } from '../middleware/auth';
 
-// Get all markets
-trades.get('/markets', async (c) => {
+const router = Router();
+const prisma = new PrismaClient();
+
+const getUser = (req: Request) => (req as any).user as { id: string; isAdmin?: boolean } | undefined;
+
+/**
+ * Update tournament P&L for a user after a trade.
+ * Tracks the credit delta (negative for buys, positive for sells) on all
+ * active tournaments the user has joined.
+ */
+async function updateTournamentPnl(userId: string, creditDelta: number) {
   try {
-    const { db } = getFirebaseAdmin();
-    const marketsRef = db.collection('markets');
-    const snapshot = await marketsRef.get();
-    
-    const markets = await Promise.all(
-      snapshot.docs.map(async (doc) => {
-        const data = doc.data();
-        // Calculate current prices using LMSR
-        const prices = calculateAllPrices({
-          id: doc.id,
-          outcomes: data.outcomes || [],
-          liquidityParameter: data.liquidityParameter || 1000,
-        });
-        
-        return {
-          id: doc.id,
-          ...data,
-          prices,
-        };
-      })
-    );
-    
-    return c.json({ success: true, data: markets });
-  } catch (error) {
-    console.error('Error fetching markets:', error);
-    return c.json({ success: false, error: 'Failed to fetch markets' }, 500);
-  }
-});
-
-// Get single market
-trades.get('/markets/:id', async (c) => {
-  try {
-    const { db } = getFirebaseAdmin();
-    const marketId = c.req.param('id');
-    
-    const marketRef = db.collection('markets').doc(marketId);
-    const doc = await marketRef.get();
-    
-    if (!doc.exists) {
-      return c.json({ success: false, error: 'Market not found' }, 404);
-    }
-    
-    const data = doc.data();
-    const prices = calculateAllPrices({
-      id: doc.id,
-      outcomes: data?.outcomes || [],
-      liquidityParameter: data?.liquidityParameter || 1000,
-    });
-    
-    return c.json({
-      success: true,
-      data: {
-        id: doc.id,
-        ...data,
-        prices,
-      },
-    });
-  } catch (error) {
-    console.error('Error fetching market:', error);
-    return c.json({ success: false, error: 'Failed to fetch market' }, 500);
-  }
-});
-
-// Execute a trade (buy shares)
-trades.post('/trade', async (c) => {
-  try {
-    const { db, auth } = getFirebaseAdmin();
-    const body = await c.req.json();
-    
-    const { marketId, outcomeId, amount, userId } = body;
-    
-    if (!marketId || !outcomeId || !amount || !userId) {
-      return c.json({ success: false, error: 'Missing required fields' }, 400);
-    }
-    
-    // Get market
-    const marketRef = db.collection('markets').doc(marketId);
-    const marketDoc = await marketRef.get();
-    
-    if (!marketDoc.exists) {
-      return c.json({ success: false, error: 'Market not found' }, 404);
-    }
-    
-    const marketData = marketDoc.data();
-    const market = {
-      id: marketId,
-      outcomes: marketData?.outcomes || [],
-      liquidityParameter: marketData?.liquidityParameter || 1000,
-    };
-    
-    // Calculate cost
-    const cost = calculateBuyCost(market, outcomeId, amount);
-    
-    // Get user balance
-    const userRef = db.collection('users').doc(userId);
-    const userDoc = await userRef.get();
-    
-    if (!userDoc.exists) {
-      return c.json({ success: false, error: 'User not found' }, 404);
-    }
-    
-    const userData = userDoc.data();
-    const currentBalance = userData?.creditBalance || 0;
-    
-    if (currentBalance < cost) {
-      return c.json({ success: false, error: 'Insufficient balance' }, 400);
-    }
-    
-    // Execute trade in transaction
-    await db.runTransaction(async (tx) => {
-      // Update market quantities
-      const outcomes = market.outcomes.map(o =>
-        o.id === outcomeId
-          ? { ...o, quantity: o.quantity + amount }
-          : o
-      );
-      
-      tx.update(marketRef, { outcomes });
-      
-      // Deduct user balance
-      tx.update(userRef, {
-        creditBalance: currentBalance - cost,
-      });
-      
-      // Record trade
-      const tradesRef = db.collection('trades');
-      tx.create(tradesRef.doc(), {
+    // Find active tournaments this user has joined
+    const participations = await prisma.tournamentParticipant.findMany({
+      where: {
         userId,
-        marketId,
-        outcomeId,
-        amount,
-        cost,
-        type: 'BUY',
-        createdAt: new Date().toISOString(),
-      });
+        tournament: { status: 'ACTIVE' },
+      },
+      select: { id: true },
     });
-    
-    // Get updated prices
-    const updatedPrices = calculateAllPrices({
-      ...market,
-      outcomes: market.outcomes.map(o =>
-        o.id === outcomeId
-          ? { ...o, quantity: o.quantity + amount }
-          : o
-      ),
+    if (participations.length === 0) return;
+
+    // Increment P&L for each active tournament participation
+    await Promise.all(
+      participations.map(p =>
+        prisma.tournamentParticipant.update({
+          where: { id: p.id },
+          data: { pnl: { increment: creditDelta } },
+        })
+      )
+    );
+  } catch (err) {
+    // Non-critical — log but don't fail the trade
+    console.error('updateTournamentPnl error:', err);
+  }
+}
+
+// Helper to build LMSR-compatible market object from Prisma market
+function toLmsrMarket(market: { id: string; liquidityB: number; outcomes: { id: string; name: string; quantity: number }[] }) {
+  return {
+    id: market.id,
+    liquidityParameter: market.liquidityB,
+    outcomes: market.outcomes.map(o => ({
+      id: o.id,
+      name: o.name,
+      quantity: o.quantity,
+    })),
+  };
+}
+
+// ============================================================
+// GET /api/trades/markets — list all markets with LMSR prices
+// ============================================================
+router.get('/markets', async (req: Request, res: Response) => {
+  try {
+    const { category, status = 'ACTIVE', limit = '20', offset = '0' } = req.query;
+
+    const where: any = { status: status as string };
+    if (category) where.category = category as string;
+
+    const markets = await prisma.market.findMany({
+      where,
+      include: {
+        outcomes: { select: { id: true, name: true, color: true, quantity: true, probability: true } },
+      },
+      orderBy: { totalVolume: 'desc' },
+      take: parseInt(limit as string),
+      skip: parseInt(offset as string),
     });
-    
-    return c.json({
-      success: true,
-      data: {
-        cost,
-        newBalance: currentBalance - cost,
-        prices: updatedPrices,
+
+    const result = markets.map(m => {
+      const lmsr = toLmsrMarket(m);
+      const prices = calculateAllPrices(lmsr);
+      return { ...m, prices };
+    });
+
+    return res.json({ success: true, data: result });
+  } catch (err) {
+    console.error('GET /trades/markets error:', err);
+    return res.status(500).json({ success: false, error: 'Failed to fetch markets' });
+  }
+});
+
+// ============================================================
+// GET /api/trades/markets/:id — single market with LMSR prices
+// ============================================================
+router.get('/markets/:id', async (req: Request, res: Response) => {
+  try {
+    const market = await prisma.market.findUnique({
+      where: { id: req.params.id },
+      include: {
+        outcomes: { select: { id: true, name: true, color: true, quantity: true, probability: true, isWinner: true } },
+        comments: {
+          include: { user: { select: { id: true, displayName: true, avatarUrl: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+          where: { parentId: null },
+        },
       },
     });
-  } catch (error) {
-    console.error('Error executing trade:', error);
-    return c.json({ success: false, error: 'Failed to execute trade' }, 500);
+
+    if (!market) {
+      return res.status(404).json({ success: false, error: 'Market not found' });
+    }
+
+    const lmsr = toLmsrMarket(market);
+    const prices = calculateAllPrices(lmsr);
+
+    return res.json({ success: true, data: { ...market, prices } });
+  } catch (err) {
+    console.error('GET /trades/markets/:id error:', err);
+    return res.status(500).json({ success: false, error: 'Failed to fetch market' });
   }
 });
 
-// Get user portfolio
-trades.get('/portfolio/:userId', async (c) => {
+// ============================================================
+// POST /api/trades/preview — preview cost before executing (no auth required)
+// ============================================================
+router.post('/preview', async (req: Request, res: Response) => {
   try {
-    const { db } = getFirebaseAdmin();
-    const userId = c.req.param('userId');
-    
-    // Get user's trades
-    const tradesRef = db.collection('trades');
-    const snapshot = await tradesRef.where('userId', '==', userId).get();
-    
-    const trades = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    
-    // Group by market
-    const holdings: Record<string, {
-      marketId: string;
-      outcomes: Record<string, number>;
-      totalCost: number;
-    }> = {};
-    
-    for (const trade of trades) {
-      if (!holdings[trade.marketId]) {
-        holdings[trade.marketId] = {
-          marketId: trade.marketId,
-          outcomes: {},
-          totalCost: 0,
-        };
-      }
-      
-      const outcome = trade.outcomeId;
-      holdings[trade.marketId].outcomes[outcome] = 
-        (holdings[trade.marketId].outcomes[outcome] || 0) + trade.amount;
-      holdings[trade.marketId].totalCost += trade.cost;
+    const { marketId, outcomeId, amount } = req.body;
+    if (!marketId || !outcomeId || !amount || amount <= 0) {
+      return res.status(400).json({ success: false, error: 'Missing fields' });
     }
-    
-    // Get market info for each holding
-    const portfolio = await Promise.all(
-      Object.values(holdings).map(async (holding) => {
-        const marketDoc = await db.collection('markets').doc(holding.marketId).get();
-        const marketData = marketDoc.data();
-        
-        // Calculate current value
-        let currentValue = 0;
-        const market = {
-          id: holding.marketId,
-          outcomes: marketData?.outcomes || [],
-          liquidityParameter: marketData?.liquidityParameter || 1000,
-        };
-        
-        for (const [outcomeId, shares] of Object.entries(holding.outcomes)) {
-          const price = calculatePrice(market, outcomeId);
-          currentValue += (price * (shares as number));
-        }
-        
-        return {
-          marketId: holding.marketId,
-          marketTitle: marketData?.title,
-          outcomes: holding.outcomes,
-          totalCost: holding.totalCost,
-          currentValue: Math.round(currentValue * 100) / 100,
-          profitLoss: Math.round((currentValue - holding.totalCost) * 100) / 100,
-        };
-      })
-    );
-    
-    return c.json({ success: true, data: portfolio });
-  } catch (error) {
-    console.error('Error fetching portfolio:', error);
-    return c.json({ success: false, error: 'Failed to fetch portfolio' }, 500);
-  }
-});
-
-// Resolve a market (admin only)
-trades.post('/resolve', async (c) => {
-  try {
-    const { db } = getFirebaseAdmin();
-    const body = await c.req.json();
-    
-    const { marketId, winningOutcomeId } = body;
-    
-    if (!marketId || !winningOutcomeId) {
-      return c.json({ success: false, error: 'Missing required fields' }, 400);
-    }
-    
-    const marketRef = db.collection('markets').doc(marketId);
-    const marketDoc = await marketRef.get();
-    
-    if (!marketDoc.exists) {
-      return c.json({ success: false, error: 'Market not found' }, 404);
-    }
-    
-    // Update market status
-    await marketRef.update({
-      status: 'RESOLVED',
-      winningOutcomeId,
-      resolvedAt: new Date().toISOString(),
+    const market = await prisma.market.findUnique({
+      where: { id: marketId },
+      include: { outcomes: { select: { id: true, name: true, quantity: true } } },
     });
-    
-    // Calculate and distribute winnings
-    const tradesRef = db.collection('trades');
-    const winningTrades = await tradesRef
-      .where('marketId', '==', marketId)
-      .where('outcomeId', '==', winningOutcomeId)
-      .get();
-    
-    await db.runTransaction(async (tx) => {
-      for (const tradeDoc of winningTrades.docs) {
-        const trade = tradeDoc.data();
-        const userRef = db.collection('users').doc(trade.userId);
-        const userDoc = await userRef.get();
-        const userData = userDoc.data();
-        
-        // Award winnings (1 credit per share for winning outcome)
-        tx.update(userRef, {
-          creditBalance: (userData?.creditBalance || 0) + trade.amount,
+    if (!market) return res.status(404).json({ success: false, error: 'Market not found' });
+    const lmsr = toLmsrMarket(market);
+    const cost = Math.max(1, Math.round(calculateBuyCost(lmsr, outcomeId, amount)));
+    const pricePerShare = cost / amount;
+    return res.json({ success: true, data: { cost, pricePerShare, amount } });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'Failed to preview trade' });
+  }
+});
+
+// ============================================================
+// POST /api/trades/preview-by-cost — given credits to spend, return shares + payout
+// ============================================================
+router.post('/preview-by-cost', async (req: Request, res: Response) => {
+  try {
+    const { marketId, outcomeId, credits } = req.body;
+    if (!marketId || !outcomeId || !credits || credits <= 0) {
+      return res.status(400).json({ success: false, error: 'Missing fields' });
+    }
+    const market = await prisma.market.findUnique({
+      where: { id: marketId },
+      include: { outcomes: { select: { id: true, name: true, quantity: true } } },
+    });
+    if (!market) return res.status(404).json({ success: false, error: 'Market not found' });
+    const lmsr = toLmsrMarket(market);
+    const shares = calculateSharesForCost(lmsr, outcomeId, credits);
+    if (shares === 0) {
+      return res.json({ success: true, data: { shares: 0, actualCost: 0, maxPayout: 0, pricePerShare: 0 } });
+    }
+    const actualCost = Math.max(1, Math.round(calculateBuyCost(lmsr, outcomeId, shares)));
+    return res.json({ success: true, data: { shares, actualCost, maxPayout: shares, pricePerShare: actualCost / shares } });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'Failed to preview trade' });
+  }
+});
+
+// ============================================================
+// POST /api/trades/trade — execute a buy trade
+// ============================================================
+router.post('/trade', authenticateUser, async (req: Request, res: Response) => {
+  try {
+    const { marketId, outcomeId, amount } = req.body;
+    const userId = getUser(req)!.id;
+
+    if (!marketId || !outcomeId || !amount || amount <= 0) {
+      return res.status(400).json({ success: false, error: 'Missing or invalid fields: marketId, outcomeId, amount required' });
+    }
+
+    const market = await prisma.market.findUnique({
+      where: { id: marketId },
+      include: { outcomes: { select: { id: true, name: true, quantity: true } } },
+    });
+
+    if (!market) return res.status(404).json({ success: false, error: 'Market not found' });
+    if (market.status !== 'ACTIVE') return res.status(400).json({ success: false, error: 'Market is not active' });
+
+    const outcome = market.outcomes.find(o => o.id === outcomeId);
+    if (!outcome) return res.status(404).json({ success: false, error: 'Outcome not found' });
+
+    const lmsr = toLmsrMarket(market);
+    const cost = Math.max(1, Math.round(calculateBuyCost(lmsr, outcomeId, amount)));
+    const pricePerShare = cost / amount;
+
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { creditBalance: true } });
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+    if (user.creditBalance < cost) return res.status(400).json({ success: false, error: 'Insufficient credits' });
+
+    // Execute in a transaction
+    const newBalance = await prisma.$transaction(async (tx) => {
+      // Update outcome quantity
+      await tx.outcome.update({
+        where: { id: outcomeId },
+        data: { quantity: { increment: amount } },
+      });
+
+      // Deduct user balance
+      const updatedUser = await tx.user.update({
+        where: { id: userId },
+        data: {
+          creditBalance: { decrement: cost },
+          totalCreditsSpent: { increment: cost },
+          totalTrades: { increment: 1 },
+        },
+        select: { creditBalance: true },
+      });
+
+      // Record trade
+      await tx.trade.create({
+        data: {
+          userId,
+          marketId,
+          outcomeId,
+          type: 'BUY',
+          quantity: amount,
+          pricePerShare,
+          totalCost: cost,
+        },
+      });
+
+      // Upsert holding
+      const existing = await tx.holding.findUnique({
+        where: { userId_marketId_outcomeId: { userId, marketId, outcomeId } },
+      });
+      if (existing) {
+        const newQty = existing.quantity + amount;
+        const newAvgCost = (existing.avgCost * existing.quantity + pricePerShare * amount) / newQty;
+        await tx.holding.update({
+          where: { id: existing.id },
+          data: { quantity: newQty, avgCost: newAvgCost },
+        });
+      } else {
+        await tx.holding.create({
+          data: { userId, marketId, outcomeId, quantity: amount, avgCost: pricePerShare },
         });
       }
+
+      // Record transaction
+      await tx.transaction.create({
+        data: {
+          userId,
+          amount: -cost,
+          type: 'TRADE_BUY',
+          description: `Bought ${amount} shares of ${outcome.name}`,
+          referenceId: marketId,
+        },
+      });
+
+      // Update market volume
+      await tx.market.update({
+        where: { id: marketId },
+        data: { totalVolume: { increment: cost } },
+      });
+
+      return updatedUser.creditBalance;
     });
-    
-    return c.json({ success: true, data: { message: 'Market resolved successfully' } });
-  } catch (error) {
-    console.error('Error resolving market:', error);
-    return c.json({ success: false, error: 'Failed to resolve market' }, 500);
+
+    // Get updated prices
+    const updatedMarket = await prisma.market.findUnique({
+      where: { id: marketId },
+      include: { outcomes: { select: { id: true, name: true, quantity: true } } },
+    });
+    const updatedPrices = calculateAllPrices(toLmsrMarket(updatedMarket!));
+
+    // Track tournament P&L (buy = negative delta)
+    await updateTournamentPnl(userId, -cost);
+
+    // Broadcast price update via WebSocket
+    const { broadcastPriceUpdate } = require('../index');
+    broadcastPriceUpdate(marketId, updatedPrices);
+
+    return res.json({
+      success: true,
+      data: { cost, newBalance, prices: updatedPrices, shares: amount },
+    });
+  } catch (err) {
+    console.error('POST /trades/trade error:', err);
+    return res.status(500).json({ success: false, error: 'Failed to execute trade' });
   }
 });
 
-export default trades;
+// ============================================================
+// GET /api/trades/portfolio/:userId — user portfolio with P&L
+// ============================================================
+router.get('/portfolio/:userId', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    const holdings = await prisma.holding.findMany({
+      where: { userId, quantity: { gt: 0 } },
+      include: {
+        market: {
+          include: {
+            outcomes: { select: { id: true, name: true, quantity: true } },
+          },
+        },
+        outcome: { select: { id: true, name: true, color: true, isWinner: true } },
+      },
+    });
+
+    const portfolio = holdings.map(h => {
+      const lmsr = toLmsrMarket(h.market);
+      const currentPrice = calculatePrice(lmsr, h.outcomeId);
+      const currentValue = Math.round(currentPrice * h.quantity * 100) / 100;
+      const costBasis = Math.round(h.avgCost * h.quantity * 100) / 100;
+      const profitLoss = Math.round((currentValue - costBasis) * 100) / 100;
+
+      return {
+        id: h.id,
+        marketId: h.marketId,
+        marketTitle: h.market.title,
+        marketStatus: h.market.status,
+        outcomeId: h.outcomeId,
+        outcomeName: h.outcome.name,
+        outcomeColor: h.outcome.color,
+        isWinner: h.outcome.isWinner,
+        quantity: h.quantity,
+        avgCost: h.avgCost,
+        currentPrice,
+        currentValue,
+        costBasis,
+        profitLoss,
+      };
+    });
+
+    return res.json({ success: true, data: portfolio });
+  } catch (err) {
+    console.error('GET /trades/portfolio/:userId error:', err);
+    return res.status(500).json({ success: false, error: 'Failed to fetch portfolio' });
+  }
+});
+
+// ============================================================
+// POST /api/trades/sell — sell shares (exit a position)
+// ============================================================
+router.post('/sell', authenticateUser, async (req: Request, res: Response) => {
+  try {
+    const { marketId, outcomeId, amount } = req.body;
+    const userId = getUser(req)!.id;
+
+    if (!marketId || !outcomeId || !amount || amount <= 0) {
+      return res.status(400).json({ success: false, error: 'Missing or invalid fields: marketId, outcomeId, amount required' });
+    }
+
+    const market = await prisma.market.findUnique({
+      where: { id: marketId },
+      include: { outcomes: { select: { id: true, name: true, quantity: true } } },
+    });
+
+    if (!market) return res.status(404).json({ success: false, error: 'Market not found' });
+    if (market.status !== 'ACTIVE') return res.status(400).json({ success: false, error: 'Market is not active' });
+
+    const outcome = market.outcomes.find(o => o.id === outcomeId);
+    if (!outcome) return res.status(404).json({ success: false, error: 'Outcome not found' });
+
+    // Check user has enough shares to sell
+    const holding = await prisma.holding.findUnique({
+      where: { userId_marketId_outcomeId: { userId, marketId, outcomeId } },
+    });
+
+    if (!holding || holding.quantity < amount) {
+      return res.status(400).json({ success: false, error: `Insufficient shares. You own ${holding?.quantity ?? 0}` });
+    }
+
+    // LMSR sell cost: selling N shares = negative buy cost for -N shares
+    // Revenue = -calculateBuyCost(market, outcomeId, -amount)
+    const lmsr = toLmsrMarket(market);
+    const revenue = Math.max(0, Math.round(-calculateBuyCost(lmsr, outcomeId, -amount)));
+
+    const newBalance = await prisma.$transaction(async (tx) => {
+      // Decrease outcome quantity
+      await tx.outcome.update({
+        where: { id: outcomeId },
+        data: { quantity: { decrement: amount } },
+      });
+
+      // Credit user balance
+      const updatedUser = await tx.user.update({
+        where: { id: userId },
+        data: {
+          creditBalance: { increment: revenue },
+          totalCreditsEarned: { increment: revenue },
+          totalTrades: { increment: 1 },
+        },
+        select: { creditBalance: true },
+      });
+
+      // Record trade
+      await tx.trade.create({
+        data: {
+          userId,
+          marketId,
+          outcomeId,
+          type: 'SELL',
+          quantity: amount,
+          pricePerShare: revenue / amount,
+          totalCost: revenue,
+        },
+      });
+
+      // Update holding
+      const newQty = holding.quantity - amount;
+      if (newQty <= 0) {
+        await tx.holding.delete({ where: { id: holding.id } });
+      } else {
+        await tx.holding.update({
+          where: { id: holding.id },
+          data: { quantity: newQty },
+        });
+      }
+
+      // Record transaction
+      await tx.transaction.create({
+        data: {
+          userId,
+          amount: revenue,
+          type: 'TRADE_SELL',
+          description: `Sold ${amount} shares of ${outcome.name}`,
+          referenceId: marketId,
+        },
+      });
+
+      // Update market volume
+      await tx.market.update({
+        where: { id: marketId },
+        data: { totalVolume: { increment: revenue } },
+      });
+
+      return updatedUser.creditBalance;
+    });
+
+    // Get updated prices
+    const updatedMarket = await prisma.market.findUnique({
+      where: { id: marketId },
+      include: { outcomes: { select: { id: true, name: true, quantity: true } } },
+    });
+    const updatedPrices = calculateAllPrices(toLmsrMarket(updatedMarket!));
+
+    // Track tournament P&L (sell = positive delta)
+    await updateTournamentPnl(userId, revenue);
+
+    // Broadcast price update via WebSocket
+    const { broadcastPriceUpdate } = require('../index');
+    broadcastPriceUpdate(marketId, updatedPrices);
+
+    return res.json({
+      success: true,
+      data: { revenue, newBalance, prices: updatedPrices, shares: amount },
+    });
+  } catch (err) {
+    console.error('POST /trades/sell error:', err);
+    return res.status(500).json({ success: false, error: 'Failed to execute sell trade' });
+  }
+});
+
+// NOTE: Market resolution is handled by POST /api/markets/:id/resolve in markets.ts
+// The duplicate resolve endpoint has been removed to avoid inconsistency.
+
+export default router;

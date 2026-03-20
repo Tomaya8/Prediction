@@ -1,49 +1,94 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  ActivityIndicator, RefreshControl,
+} from 'react-native';
 import { Colors } from '../../lib/colors';
+import { apiClient } from '../../lib/api-client';
+import { getStoredUser } from '../../lib/auth';
 
-// Mock portfolio data
-const MOCK_PORTFOLIO = {
-  totalValue: 165,
-  totalCost: 100,
-  profitLoss: 65,
-  roi: 65,
-  holdings: [
-    {
-      id: '1',
-      marketTitle: 'Will Bitcoin exceed $100k?',
-      outcome: 'Yes',
-      quantity: 100,
-      currentPrice: 0.65,
-      cost: 50,
-      value: 65,
-      pnl: 15,
-    },
-    {
-      id: '2',
-      marketTitle: 'Will Trump win 2024?',
-      outcome: 'Yes',
-      quantity: 100,
-      currentPrice: 0.52,
-      cost: 50,
-      value: 52,
-      pnl: 2,
-    },
-  ],
-  resolved: [
-    {
-      id: '3',
-      marketTitle: 'Olympics 2024 Gold',
-      outcome: 'USA Wins',
-      quantity: 50,
-      result: 'won',
-      winnings: 40,
-    },
-  ],
-};
+interface Holding {
+  id: string;
+  marketId: string;
+  marketTitle: string;
+  marketStatus: string;
+  outcomeId: string;
+  outcomeName: string;
+  outcomeColor?: string;
+  isWinner: boolean;
+  quantity: number;
+  avgCost: number;
+  currentPrice: number;
+  currentValue: number;
+  costBasis: number;
+  profitLoss: number;
+}
+
+function fmtPnl(value: number): string {
+  const rounded = Math.round(value);
+  if (rounded === 0 || Object.is(rounded, -0)) return '0 credits';
+  return (rounded > 0 ? '+' : '') + rounded + ' credits';
+}
 
 export default function PortfolioScreen() {
-  const [portfolio] = useState(MOCK_PORTFOLIO);
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchPortfolio = useCallback(async () => {
+    const user = await getStoredUser();
+    if (!user) {
+      setError('Not signed in');
+      setLoading(false);
+      return;
+    }
+    const res = await apiClient.getPortfolio(user.id);
+    if (res.success && res.data) {
+      setHoldings(res.data as unknown as Holding[]);
+      setError(null);
+    } else {
+      setError(res.error ?? 'Failed to load portfolio');
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchPortfolio();
+  }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchPortfolio();
+    setRefreshing(false);
+  };
+
+  const activeHoldings = holdings.filter(h => h.marketStatus === 'ACTIVE');
+  const resolvedHoldings = holdings.filter(h => h.marketStatus === 'RESOLVED');
+
+  const totalValue = activeHoldings.reduce((s, h) => s + h.currentValue, 0);
+  const totalCost = activeHoldings.reduce((s, h) => s + h.costBasis, 0);
+  const profitLoss = totalValue - totalCost;
+  const roi = totalCost > 0 ? (profitLoss / totalCost) * 100 : 0;
+
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity onPress={() => { setLoading(true); fetchPortfolio(); }} style={styles.retryButton}>
+          <Text style={styles.retryText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -51,56 +96,53 @@ export default function PortfolioScreen() {
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>Total Value</Text>
-          <Text style={styles.statValue}>{portfolio.totalValue.toFixed(0)}</Text>
+          <Text style={styles.statValue}>{totalValue.toFixed(0)}</Text>
           <Text style={styles.statCurrency}>credits</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>Total Cost</Text>
-          <Text style={styles.statValue}>{portfolio.totalCost.toFixed(0)}</Text>
+          <Text style={styles.statValue}>{totalCost.toFixed(0)}</Text>
           <Text style={styles.statCurrency}>credits</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>P&L</Text>
-          <Text style={[
-            styles.statValue,
-            portfolio.profitLoss >= 0 ? styles.positive : styles.negative
-          ]}>
-            {portfolio.profitLoss >= 0 ? '+' : ''}{portfolio.profitLoss.toFixed(0)}
+          <Text style={[styles.statValue, Math.round(profitLoss) > 0 ? styles.positive : Math.round(profitLoss) < 0 ? styles.negative : {}]}>
+            {Math.round(profitLoss) === 0 || Object.is(Math.round(profitLoss), -0) ? '0' : (profitLoss > 0 ? '+' : '') + Math.round(profitLoss)}
           </Text>
-          <Text style={[
-            styles.statCurrency,
-            portfolio.roi >= 0 ? styles.positive : styles.negative
-          ]}>
-            ({portfolio.roi >= 0 ? '+' : ''}{portfolio.roi.toFixed(0)}%)
+          <Text style={[styles.statCurrency, Math.round(roi) > 0 ? styles.positive : Math.round(roi) < 0 ? styles.negative : {}]}>
+            ({Math.round(roi) > 0 ? '+' : ''}{Math.round(roi) === 0 || Object.is(Math.round(roi), -0) ? '0' : Math.round(roi)}%)
           </Text>
         </View>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
+      >
         {/* Active Positions */}
         <Text style={styles.sectionTitle}>Active Positions</Text>
-        {portfolio.holdings.length === 0 ? (
+        {activeHoldings.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>📊</Text>
             <Text style={styles.emptyText}>No active positions</Text>
             <Text style={styles.emptySubtext}>Start trading to build your portfolio</Text>
           </View>
         ) : (
-          portfolio.holdings.map((holding) => (
+          activeHoldings.map(holding => (
             <View key={holding.id} style={styles.holdingCard}>
               <View style={styles.holdingHeader}>
-                <Text style={styles.holdingMarket}>{holding.marketTitle}</Text>
+                <Text style={styles.holdingMarket} numberOfLines={2}>{holding.marketTitle}</Text>
                 <View style={styles.outcomeBadge}>
-                  <View style={[styles.outcomeDot, { backgroundColor: Colors.yes }]} />
-                  <Text style={styles.outcomeText}>{holding.outcome}</Text>
+                  <View style={[styles.outcomeDot, { backgroundColor: holding.outcomeColor ?? Colors.yes }]} />
+                  <Text style={styles.outcomeText}>{holding.outcomeName}</Text>
                 </View>
               </View>
               <View style={styles.holdingDetails}>
                 <View style={styles.holdingRow}>
                   <Text style={styles.holdingLabel}>Shares</Text>
-                  <Text style={styles.holdingValue}>{holding.quantity}</Text>
+                  <Text style={styles.holdingValue}>{holding.quantity.toFixed(2)}</Text>
                 </View>
                 <View style={styles.holdingRow}>
                   <Text style={styles.holdingLabel}>Current Price</Text>
@@ -108,53 +150,44 @@ export default function PortfolioScreen() {
                 </View>
                 <View style={styles.holdingRow}>
                   <Text style={styles.holdingLabel}>Value</Text>
-                  <Text style={styles.holdingValue}>{holding.value.toFixed(0)} credits</Text>
+                  <Text style={styles.holdingValue}>{holding.currentValue.toFixed(0)} credits</Text>
                 </View>
                 <View style={styles.holdingRow}>
                   <Text style={styles.holdingLabel}>Cost</Text>
-                  <Text style={styles.holdingValue}>{holding.cost.toFixed(0)} credits</Text>
+                  <Text style={styles.holdingValue}>{holding.costBasis.toFixed(0)} credits</Text>
                 </View>
                 <View style={[styles.holdingRow, styles.pnlRow]}>
                   <Text style={styles.holdingLabel}>P&L</Text>
-                  <Text style={[
-                    styles.holdingValue,
-                    holding.pnl >= 0 ? styles.positive : styles.negative
-                  ]}>
-                    {holding.pnl >= 0 ? '+' : ''}{holding.pnl.toFixed(0)} credits
+                  <Text style={[styles.holdingValue, holding.profitLoss >= 0.5 ? styles.positive : holding.profitLoss <= -0.5 ? styles.negative : styles.holdingValue]}>
+                    {fmtPnl(holding.profitLoss)}
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity style={styles.sellButton}>
-                <Text style={styles.sellButtonText}>Sell</Text>
-              </TouchableOpacity>
             </View>
           ))
         )}
 
         {/* Resolved Markets */}
-        {portfolio.resolved.length > 0 && (
+        {resolvedHoldings.length > 0 && (
           <>
             <Text style={styles.sectionTitle}>Resolved Markets</Text>
-            {portfolio.resolved.map((item) => (
+            {resolvedHoldings.map(item => (
               <View key={item.id} style={styles.resolvedCard}>
                 <View style={styles.holdingHeader}>
-                  <Text style={styles.holdingMarket}>{item.marketTitle}</Text>
-                  <View style={[
-                    styles.resultBadge,
-                    item.result === 'won' ? styles.wonBadge : styles.lostBadge
-                  ]}>
+                  <Text style={styles.holdingMarket} numberOfLines={2}>{item.marketTitle}</Text>
+                  <View style={[styles.resultBadge, item.isWinner ? styles.wonBadge : styles.lostBadge]}>
                     <Text style={styles.resultText}>
-                      {item.result === 'won' ? '✅ Won' : '❌ Lost'}
+                      {item.isWinner ? '✅ Won' : '❌ Lost'}
                     </Text>
                   </View>
                 </View>
                 <View style={styles.resolvedDetails}>
                   <Text style={styles.resolvedText}>
-                    {item.outcome} • {item.quantity} shares
+                    {item.outcomeName} • {item.quantity.toFixed(2)} shares
                   </Text>
-                  {item.result === 'won' && (
+                  {item.isWinner && (
                     <Text style={styles.winningsText}>
-                      +{item.winnings} credits
+                      +{Math.floor(item.quantity)} credits
                     </Text>
                   )}
                 </View>
@@ -166,7 +199,7 @@ export default function PortfolioScreen() {
         {/* Disclaimer */}
         <View style={styles.disclaimer}>
           <Text style={styles.disclaimerText}>
-            ⚠️ Credits have no real-world value. This is not gambling.
+            Credits have no real-world value. This is not gambling.
           </Text>
         </View>
       </ScrollView>
@@ -178,6 +211,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  centered: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorText: {
+    color: Colors.danger,
+    fontSize: 15,
+    marginBottom: 12,
+  },
+  retryButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  retryText: {
+    color: '#fff',
+    fontWeight: '700',
   },
   statsContainer: {
     flexDirection: 'row',
@@ -254,12 +308,13 @@ const styles = StyleSheet.create({
   holdingHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 12,
+    gap: 8,
   },
   holdingMarket: {
     color: Colors.textPrimary,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     flex: 1,
   },
@@ -304,17 +359,6 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 14,
     fontWeight: '500',
-  },
-  sellButton: {
-    backgroundColor: Colors.danger,
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  sellButtonText: {
-    color: Colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
   },
   resolvedCard: {
     backgroundColor: Colors.surface,

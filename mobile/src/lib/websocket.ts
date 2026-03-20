@@ -20,8 +20,9 @@ class WebSocketService {
   private disconnectHandlers: ConnectionHandler[] = [];
   private isConnecting = false;
 
-  constructor(url: string = 'wss://your-backend.com/ws') {
-    this.url = url;
+  constructor(url: string = '') {
+    // Use environment variable or default to localhost for development
+    this.url = url || process.env.EXPO_PUBLIC_WS_URL || 'ws://localhost:3001/ws';
   }
 
   // Connect to WebSocket server

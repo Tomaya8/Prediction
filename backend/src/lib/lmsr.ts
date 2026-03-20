@@ -215,6 +215,32 @@ export function createMarket(
   };
 }
 
+/**
+ * Inverse LMSR: given a credit budget, find the number of shares that can be bought.
+ * Uses binary search since calculateBuyCost is monotonically increasing in amount.
+ */
+export function calculateSharesForCost(
+  market: Market,
+  outcomeId: string,
+  targetCredits: number
+): number {
+  if (targetCredits <= 0) return 0;
+  const currentPrice = calculatePrice(market, outcomeId);
+  // Upper bound: rough estimate, generous to cover price impact
+  let lo = 0;
+  let hi = (targetCredits / Math.max(currentPrice, 0.001)) * 1.5;
+  for (let i = 0; i < 64; i++) {
+    const mid = (lo + hi) / 2;
+    const cost = calculateBuyCost(market, outcomeId, mid);
+    if (cost < targetCredits) lo = mid;
+    else hi = mid;
+  }
+  return Math.floor(lo); // floor ensures we never exceed budget
+}
+
+// Alias used by markets.ts route
+export const calculatePrices = calculateAllPrices;
+
 // Example usage:
 // const market = createMarket('btc-100k', ['Yes', 'No'], 0.5, 1000);
 // const price = calculatePrice(market, 'yes'); // ~0.5
