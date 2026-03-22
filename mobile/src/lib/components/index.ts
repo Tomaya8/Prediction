@@ -11,8 +11,10 @@ export type { Comment } from './Comments';
 export { NewsLinks, generateMockNews } from './NewsLinks';
 export type { NewsArticle } from './NewsLinks';
 
-export { TrendingMarkets, generateMockTrendingMarkets } from './TrendingMarkets';
+export { TrendingMarkets } from './TrendingMarkets';
 export type { TrendingMarket } from './TrendingMarkets';
 
 export { OrderBook, generateMockOrderBook } from './OrderBook';
 export type { OrderBookEntry } from './OrderBook';
+
+export { ToastProvider, showToast, ConfirmProvider, showConfirm } from './Toast';

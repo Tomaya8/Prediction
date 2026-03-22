@@ -6,7 +6,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { apiClient } from '../lib/api-client';
 import { onAuthChange, getStoredToken, type AuthUser } from '../lib/auth';
-import { Colors } from '../lib/colors';
+import { Colors, onThemeChange } from '../lib/colors';
+import { ToastProvider, ConfirmProvider } from '../lib/components';
 
 // Prevent splash screen from auto-hiding (safe — ignore errors)
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -16,6 +17,14 @@ export default function RootLayout() {
   const segments = useSegments();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  // Force re-render when theme changes
+  const [, setThemeTick] = useState(0);
+
+  // Listen for theme changes — triggers full tree re-render
+  useEffect(() => {
+    const unsub = onThemeChange(() => setThemeTick(t => t + 1));
+    return unsub;
+  }, []);
 
   // Listen for auth state changes
   useEffect(() => {
@@ -33,31 +42,23 @@ export default function RootLayout() {
       markReady();
     });
 
-    // Safety: if onAuthChange never fires (e.g. SecureStore hangs), force ready after 3s
     const timeout = setTimeout(markReady, 3000);
-
     return () => { unsubscribe(); clearTimeout(timeout); };
   }, []);
 
-  // Route guard: redirect based on auth state
+  // Route guard
   useEffect(() => {
     if (!authReady) return;
-
     const inAuthGroup = segments[0] === 'auth';
-
-    if (!user && !inAuthGroup) {
-      router.replace('/auth');
-    } else if (user && inAuthGroup) {
-      router.replace('/(tabs)');
-    }
+    if (!user && !inAuthGroup) router.replace('/auth');
+    else if (user && inAuthGroup) router.replace('/(tabs)');
   }, [user, authReady, segments]);
 
-  // Hide splash once auth is determined
+  // Hide splash
   useEffect(() => {
     if (authReady) SplashScreen.hideAsync().catch(() => {});
   }, [authReady]);
 
-  // Show spinner while checking stored credentials
   if (!authReady) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' }}>
@@ -68,6 +69,8 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
+      <ToastProvider>
+      <ConfirmProvider>
       <StatusBar style={Colors.statusBarStyle} />
       <Stack
         screenOptions={{
@@ -84,6 +87,8 @@ export default function RootLayout() {
           options={{ title: 'Market Details', presentation: 'card' }}
         />
       </Stack>
+      </ConfirmProvider>
+      </ToastProvider>
     </SafeAreaProvider>
   );
 }

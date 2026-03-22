@@ -26,10 +26,6 @@ export default function SettingsScreen() {
   const handleDarkModeToggle = (value: boolean) => {
     setDarkMode(value);
     setThemeMode(value ? 'dark' : 'light');
-    Alert.alert(
-      'Theme Changed',
-      `${value ? 'Dark' : 'Light'} mode will fully apply on next app restart.`,
-    );
   };
 
   const handleSignOut = () => {

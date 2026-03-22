@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
-import { Comments } from '../../lib/components';
+import { Comments, showToast, showConfirm } from '../../lib/components';
 import { apiClient, type Market, type TradeResult } from '../../lib/api-client';
 import websocketService from '../../lib/websocket';
 
@@ -172,46 +172,41 @@ export default function MarketDetailScreen() {
       return;
     }
 
-    Alert.alert(
-      'Confirm Trade',
-      `Buy ${previewShares} shares of "${selectedOutcomeData?.name}" for ${cost} credits?\nMax payout: ${previewShares} credits`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: async () => {
-            setExecutingTrade(true);
-            try {
-              const mktId = Array.isArray(id) ? id[0] : id || '1';
-              const response = await apiClient.executeTrade({
-                marketId: mktId,
-                outcomeId: selectedOutcome,
-                amount: previewShares,
-              });
+    showConfirm({
+      title: 'Confirm Trade',
+      message: `Buy ${previewShares} shares of "${selectedOutcomeData?.name}" for ${cost} credits?\nMax payout: ${previewShares} credits`,
+      confirmText: 'Buy',
+      onConfirm: async () => {
+        setExecutingTrade(true);
+        try {
+          const mktId = Array.isArray(id) ? id[0] : id || '1';
+          const response = await apiClient.executeTrade({
+            marketId: mktId,
+            outcomeId: selectedOutcome,
+            amount: previewShares,
+          });
 
-              if (response.success && response.data) {
-                const result: TradeResult = response.data;
-                setUserBalance(result.newBalance);
-                setPreviewShares(null);
-                setPreviewActualCost(null);
-                Alert.alert(
-                  'Trade Placed!',
-                  `Bought ${previewShares} shares of ${selectedOutcomeData?.name}.\nCost: ${result.cost} credits\nMax payout: ${previewShares} credits\nBalance: ${result.newBalance} credits`
-                );
-                fetchMarketData();
-              } else {
-                Alert.alert('Error', response.error || 'Trade failed');
-              }
-            } catch (err) {
-              Alert.alert('Error', 'Failed to execute trade. Please try again.');
-              console.error('Trade error:', err);
-            } finally {
-              setExecutingTrade(false);
-            }
+          if (response.success && response.data) {
+            const result: TradeResult = response.data;
+            setUserBalance(result.newBalance);
+            setPreviewShares(null);
+            setPreviewActualCost(null);
+            showToast({
+              message: `Bought ${previewShares} shares of ${selectedOutcomeData?.name} for ${result.cost} credits`,
+              type: 'success',
+            });
+            fetchMarketData();
+          } else {
+            showToast({ message: response.error || 'Trade failed', type: 'error' });
           }
-        },
-      ]
-    );
+        } catch (err) {
+          showToast({ message: 'Failed to execute trade. Please try again.', type: 'error' });
+          console.error('Trade error:', err);
+        } finally {
+          setExecutingTrade(false);
+        }
+      },
+    });
   };
 
   // Show loading state

@@ -144,14 +144,7 @@ export type ThemePalette = Omit<typeof darkPalette, 'statusBarStyle'> & { status
 export type ThemeMode = 'light' | 'dark' | 'system';
 
 let currentMode: ThemeMode = 'light';
-
-export function setThemeMode(mode: ThemeMode) {
-  currentMode = mode;
-}
-
-export function getThemeMode(): ThemeMode {
-  return currentMode;
-}
+const themeListeners: Array<(palette: ThemePalette) => void> = [];
 
 function resolveMode(): 'light' | 'dark' {
   if (currentMode === 'system') {
@@ -160,12 +153,41 @@ function resolveMode(): 'light' | 'dark' {
   return currentMode;
 }
 
-/** Active color palette — call this to get current colors */
-export function getColors(): ThemePalette {
+function getResolvedPalette(): ThemePalette {
   return resolveMode() === 'dark' ? darkPalette : lightPalette;
 }
 
-// Default export for backward compatibility — defaults to light mode
-export const Colors = lightPalette;
+/** Mutable Colors object — updated in place when theme changes so all
+ *  screens referencing `Colors.xxx` see the new values immediately. */
+export const Colors: ThemePalette = { ...lightPalette };
+
+function applyTheme() {
+  const palette = getResolvedPalette();
+  // Mutate the shared Colors object in place
+  Object.assign(Colors, palette);
+  themeListeners.forEach(fn => fn(palette));
+}
+
+export function setThemeMode(mode: ThemeMode) {
+  currentMode = mode;
+  applyTheme();
+}
+
+export function getThemeMode(): ThemeMode {
+  return currentMode;
+}
+
+export function getColors(): ThemePalette {
+  return getResolvedPalette();
+}
+
+/** Subscribe to theme changes — returns unsubscribe function */
+export function onThemeChange(fn: (palette: ThemePalette) => void): () => void {
+  themeListeners.push(fn);
+  return () => {
+    const i = themeListeners.indexOf(fn);
+    if (i >= 0) themeListeners.splice(i, 1);
+  };
+}
 
 export default Colors;
