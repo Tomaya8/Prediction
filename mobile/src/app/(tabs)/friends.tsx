@@ -4,8 +4,10 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   Share, RefreshControl, ActivityIndicator, Modal, TextInput,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
 import { apiClient, type Market } from '../../lib/api-client';
+import { showToast } from '../../lib/components';
 
 interface Friend {
   id: string;
@@ -249,6 +251,12 @@ export default function FriendsScreen() {
   const [challengeTarget, setChallengeTarget] = useState<Friend | null>(null);
   const [showChallengeModal, setShowChallengeModal] = useState(false);
 
+  // User search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [followLoadingId, setFollowLoadingId] = useState<string | null>(null);
+
   const fetchAll = useCallback(async (isRefresh = false) => {
     try {
       isRefresh ? setRefreshing(true) : setLoading(true);
@@ -269,6 +277,31 @@ export default function FriendsScreen() {
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // Search users
+  useEffect(() => {
+    if (searchQuery.trim().length < 2) { setSearchResults([]); return; }
+    const timeout = setTimeout(async () => {
+      setSearching(true);
+      const res = await apiClient.searchUsers(searchQuery.trim());
+      if (res.success && res.data) setSearchResults(res.data);
+      setSearching(false);
+    }, 400);
+    return () => clearTimeout(timeout);
+  }, [searchQuery]);
+
+  const handleFollowUser = async (userId: string, displayName: string, isFollowing: boolean) => {
+    setFollowLoadingId(userId);
+    const res = isFollowing
+      ? await apiClient.unfollowUser(userId)
+      : await apiClient.followUser(userId);
+    if (res.success) {
+      showToast({ message: isFollowing ? `Unfollowed ${displayName}` : `Now following ${displayName}!`, type: 'success' });
+      setSearchResults(prev => prev.map(u => u.id === userId ? { ...u, isFollowing: !isFollowing } : u));
+      fetchAll(true);
+    }
+    setFollowLoadingId(null);
+  };
 
   const handleShareReferral = async () => {
     const code = referral?.referralCode || '';
@@ -388,12 +421,74 @@ export default function FriendsScreen() {
         {/* ——— FRIENDS TAB ——— */}
         {activeTab === 'friends' && (
           <View>
-            <Text style={styles.sectionTitle}>Your Friends</Text>
+            {/* Search bar */}
+            <View style={styles.searchContainer}>
+              <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search users by name..."
+                placeholderTextColor={Colors.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCapitalize="none"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Ionicons name="close-circle" size={18} color={Colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Search results */}
+            {searchQuery.length >= 2 && (
+              <View style={{ marginBottom: Spacing.lg }}>
+                <Text style={styles.sectionTitle}>Search Results</Text>
+                {searching ? (
+                  <ActivityIndicator color={Colors.primary} style={{ marginVertical: Spacing.lg }} />
+                ) : searchResults.length === 0 ? (
+                  <Text style={styles.noResultsText}>No users found</Text>
+                ) : (
+                  searchResults.map(user => (
+                    <View key={user.id} style={styles.friendCard}>
+                      <View style={styles.friendLeft}>
+                        <View style={styles.avatarContainer}>
+                          <Text style={styles.avatar}>
+                            {(user.displayName || '?')[0].toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={styles.friendInfo}>
+                          <Text style={styles.friendName}>{user.displayName || 'Anonymous'}</Text>
+                          <Text style={styles.friendStats}>
+                            {user.creditBalance?.toLocaleString()} credits · {user.winRate}% win
+                          </Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.followBtn, user.isFollowing && styles.followingBtn]}
+                        onPress={() => handleFollowUser(user.id, user.displayName, user.isFollowing)}
+                        disabled={followLoadingId === user.id}
+                      >
+                        {followLoadingId === user.id ? (
+                          <ActivityIndicator size="small" color={Colors.primary} />
+                        ) : (
+                          <Text style={[styles.followBtnText, user.isFollowing && styles.followingBtnText]}>
+                            {user.isFollowing ? 'Following' : 'Follow'}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  ))
+                )}
+              </View>
+            )}
+
+            {/* Friends list */}
+            <Text style={styles.sectionTitle}>Your Friends ({friends.length})</Text>
             {friends.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyIcon}>👥</Text>
+                <Ionicons name="people-outline" size={40} color={Colors.textMuted} style={{ marginBottom: Spacing.md }} />
                 <Text style={styles.emptyTitle}>No Friends Yet</Text>
-                <Text style={styles.emptyText}>Follow other users to see them here.</Text>
+                <Text style={styles.emptyText}>Search for users above or follow traders from the Leaderboard!</Text>
               </View>
             ) : (
               friends.map(friend => (
@@ -642,6 +737,15 @@ const styles = StyleSheet.create({
   tabTextActive: { color: Colors.textPrimary },
   content: { flex: 1, paddingHorizontal: Spacing.lg },
   sectionTitle: { fontSize: FontSize.xl, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: Spacing.md, marginTop: Spacing.sm },
+
+  // Search
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, marginBottom: Spacing.md, gap: Spacing.sm },
+  searchInput: { flex: 1, fontSize: FontSize.lg, color: Colors.textPrimary, paddingVertical: Spacing.xs },
+  noResultsText: { color: Colors.textSecondary, fontSize: FontSize.md, textAlign: 'center', paddingVertical: Spacing.lg },
+  followBtn: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: Radius.full, backgroundColor: Colors.primary, minWidth: 80, alignItems: 'center' },
+  followingBtn: { backgroundColor: Colors.surfaceHighlight },
+  followBtnText: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.textPrimary },
+  followingBtnText: { color: Colors.textSecondary },
 
   // Friends
   friendCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: Radius.md, marginBottom: Spacing.sm },

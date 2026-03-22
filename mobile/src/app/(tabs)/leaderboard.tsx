@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
 import { apiClient } from '../../lib/api-client';
+import { showToast } from '../../lib/components';
 
 interface LeaderboardEntry {
   rank: number;
@@ -27,10 +28,15 @@ export default function LeaderboardScreen() {
   const [error, setError] = useState<string | null>(null);
   const [scoreType, setScoreType] = useState<ScoreType>('credits');
   const [userRank, setUserRank] = useState<number | null>(null);
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [followLoading, setFollowLoading] = useState<string | null>(null);
 
   const fetchLeaderboard = useCallback(async () => {
     try {
-      const res = await apiClient.getLeaderboard(scoreType);
+      const [res, friendsRes] = await Promise.all([
+        apiClient.getLeaderboard(scoreType),
+        apiClient.getFriends(),
+      ]);
       if (res.success && res.data) {
         const data = res.data as any;
         setLeaderboard(data.leaderboard ?? data);
@@ -39,6 +45,9 @@ export default function LeaderboardScreen() {
       } else {
         setError(res.error ?? 'Failed to load leaderboard');
       }
+      if (friendsRes.success && friendsRes.data) {
+        setFollowingIds(new Set(friendsRes.data.map((f: any) => f.id)));
+      }
     } catch {
       setError('Failed to load leaderboard');
     } finally {
@@ -46,6 +55,27 @@ export default function LeaderboardScreen() {
       setRefreshing(false);
     }
   }, [scoreType]);
+
+  const handleFollow = async (userId: string, displayName: string) => {
+    if (followLoading) return;
+    setFollowLoading(userId);
+    const isFollowing = followingIds.has(userId);
+    const res = isFollowing
+      ? await apiClient.unfollowUser(userId)
+      : await apiClient.followUser(userId);
+    if (res.success) {
+      setFollowingIds(prev => {
+        const next = new Set(prev);
+        isFollowing ? next.delete(userId) : next.add(userId);
+        return next;
+      });
+      showToast({
+        message: isFollowing ? `Unfollowed ${displayName}` : `Following ${displayName}`,
+        type: 'success',
+      });
+    }
+    setFollowLoading(null);
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -175,8 +205,25 @@ export default function LeaderboardScreen() {
                   )}
                 </View>
 
-                {/* Score */}
-                <Text style={styles.scoreText}>{formatScore(entry.score)}</Text>
+                {/* Score + Follow */}
+                <View style={styles.scoreCol}>
+                  <Text style={styles.scoreText}>{formatScore(entry.score)}</Text>
+                  {!entry.isCurrentUser && (
+                    <TouchableOpacity
+                      style={[styles.followBtn, followingIds.has(entry.userId) && styles.followingBtn]}
+                      onPress={() => handleFollow(entry.userId, entry.displayName)}
+                      disabled={followLoading === entry.userId}
+                    >
+                      {followLoading === entry.userId ? (
+                        <ActivityIndicator size="small" color={Colors.primary} />
+                      ) : (
+                        <Text style={[styles.followBtnText, followingIds.has(entry.userId) && styles.followingBtnText]}>
+                          {followingIds.has(entry.userId) ? 'Following' : 'Follow'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             );
           })
@@ -333,10 +380,33 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     marginTop: 2,
   },
+  scoreCol: {
+    alignItems: 'flex-end',
+    gap: Spacing.xs,
+  },
   scoreText: {
     color: Colors.primary,
     fontSize: FontSize.lg,
     fontWeight: '700',
+  },
+  followBtn: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.primary,
+    minWidth: 72,
+    alignItems: 'center',
+  },
+  followingBtn: {
+    backgroundColor: Colors.surfaceHighlight,
+  },
+  followBtnText: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  followingBtnText: {
+    color: Colors.textSecondary,
   },
   disclaimer: {
     paddingVertical: Spacing.xl,

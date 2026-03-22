@@ -16,6 +16,60 @@ const getUser = (req: Request) => (req as any).user as { id: string; isAdmin?: b
 // ============================================
 
 /**
+ * GET /api/users/search?q=username
+ * Search for users by display name (public, for friend discovery)
+ */
+router.get('/search', async (req: Request, res: Response) => {
+  try {
+    const { q, limit = '20' } = req.query;
+    if (!q || (q as string).trim().length < 2) {
+      return res.status(400).json({ success: false, error: 'Search query must be at least 2 characters' });
+    }
+
+    const currentUserId = getUser(req)?.id;
+
+    const users = await prisma.user.findMany({
+      where: {
+        displayName: { contains: q as string, mode: 'insensitive' },
+        isBanned: false,
+        ...(currentUserId ? { id: { not: currentUserId } } : {}),
+      },
+      select: {
+        id: true,
+        displayName: true,
+        avatarUrl: true,
+        creditBalance: true,
+        totalTrades: true,
+        winningTrades: true,
+      },
+      orderBy: { creditBalance: 'desc' },
+      take: Math.min(parseInt(limit as string) || 20, 50),
+    });
+
+    // Check which users the current user follows
+    let followingIds = new Set<string>();
+    if (currentUserId) {
+      const follows = await prisma.follow.findMany({
+        where: { followerId: currentUserId, followingId: { in: users.map(u => u.id) } },
+        select: { followingId: true },
+      });
+      followingIds = new Set(follows.map(f => f.followingId));
+    }
+
+    const result = users.map(u => ({
+      ...u,
+      winRate: u.totalTrades > 0 ? Math.round((u.winningTrades / u.totalTrades) * 100) : 0,
+      isFollowing: followingIds.has(u.id),
+    }));
+
+    return res.json({ success: true, data: result });
+  } catch (err) {
+    console.error('GET /users/search error:', err);
+    return res.status(500).json({ success: false, error: 'Failed to search users' });
+  }
+});
+
+/**
  * GET /api/users/me
  * Get current user's profile
  */

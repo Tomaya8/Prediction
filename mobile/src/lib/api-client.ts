@@ -234,6 +234,10 @@ class ApiClient {
     });
   }
 
+  async searchUsers(query: string): Promise<ApiResponse<any[]>> {
+    return this.request(`/users/search?q=${encodeURIComponent(query)}`);
+  }
+
   // ============ LEADERBOARD ============
 
   async getLeaderboard(type: 'credits' | 'roi' = 'credits'): Promise<ApiResponse<any[]>> {
