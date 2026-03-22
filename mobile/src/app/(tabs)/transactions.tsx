@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, RefreshControl,
 } from 'react-native';
-import { Colors } from '../../lib/colors';
+import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
 import { apiClient } from '../../lib/api-client';
 
 interface Transaction {
@@ -202,35 +202,35 @@ const styles = StyleSheet.create({
   errorText: {
     color: Colors.danger,
     fontSize: 15,
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   retryButton: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing.xxl,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: Radius.md,
   },
   retryText: {
-    color: '#fff',
+    color: Colors.textPrimary,
     fontWeight: '700',
   },
   filterContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    gap: Spacing.sm,
   },
   filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.xl,
     backgroundColor: Colors.surface,
   },
   filterActive: {
     backgroundColor: Colors.primary,
   },
   filterText: {
-    fontSize: 14,
+    fontSize: FontSize.md,
     color: Colors.textSecondary,
     fontWeight: '500',
   },
@@ -239,16 +239,16 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     flex: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing.lg,
   },
   transactionCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 8,
+    padding: Spacing.lg,
+    borderRadius: Radius.md,
+    marginBottom: Spacing.sm,
   },
   transactionLeft: {
     flexDirection: 'row',
@@ -257,18 +257,18 @@ const styles = StyleSheet.create({
   },
   transactionIcon: {
     fontSize: 24,
-    marginRight: 12,
+    marginRight: Spacing.md,
   },
   transactionInfo: {
     flex: 1,
   },
   transactionType: {
-    fontSize: 16,
+    fontSize: FontSize.lg,
     fontWeight: '600',
     color: Colors.textPrimary,
   },
   transactionDesc: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     color: Colors.textSecondary,
     marginTop: 2,
   },
@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   transactionAmount: {
-    fontSize: 18,
+    fontSize: FontSize.xl,
     fontWeight: 'bold',
   },
   transactionCredits: {
@@ -294,10 +294,10 @@ const styles = StyleSheet.create({
   },
   emptyIcon: {
     fontSize: 48,
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: FontSize.lg,
     color: Colors.textSecondary,
   },
 });

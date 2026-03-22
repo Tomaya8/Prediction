@@ -1,18 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Colors } from '../../lib/colors';
-import {
-  PriceChart,
-  VolumeChart,
-  generateMockPriceHistory,
-  generateMockVolumeData,
-  Comments,
-  NewsLinks,
-  generateMockNews,
-  OrderBook,
-  generateMockOrderBook,
-} from '../../lib/components';
+import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
+import { Comments } from '../../lib/components';
 import { apiClient, type Market, type TradeResult } from '../../lib/api-client';
 import websocketService from '../../lib/websocket';
 
@@ -25,8 +15,8 @@ const DEFAULT_MARKET: Market = {
   expiresAt: '2024-12-31',
   totalVolume: 25000,
   outcomes: [
-    { id: 'yes', name: 'Yes', color: '#22C55E', currentPrice: 0.65 },
-    { id: 'no', name: 'No', color: '#EF4444', currentPrice: 0.35 },
+    { id: 'yes', name: 'Yes', color: Colors.yes, currentPrice: 0.65 },
+    { id: 'no', name: 'No', color: Colors.no, currentPrice: 0.35 },
   ],
 };
 
@@ -45,14 +35,8 @@ export default function MarketDetailScreen() {
   const [previewActualCost, setPreviewActualCost] = useState<number | null>(null);
   const [executingTrade, setExecutingTrade] = useState(false);
 
-  // Chart data state - will be updated when market data loads
-  const [priceHistory, setPriceHistory] = useState(() => generateMockPriceHistory(0.65, 30));
-  const [volumeData] = useState(() => generateMockVolumeData(30));
-
-  // Comments, news, order book
+  // Comments
   const [comments, setComments] = useState<any[]>([]);
-  const [news] = useState(() => generateMockNews(market.title));
-  const [orderBook, setOrderBook] = useState(() => generateMockOrderBook(0.65));
 
   // Fetch market data from API
   const fetchMarketData = useCallback(async (isRefresh = false) => {
@@ -63,10 +47,10 @@ export default function MarketDetailScreen() {
         setLoading(true);
       }
       setError(null);
-      
+
       const marketId = Array.isArray(id) ? id[0] : id || '1';
       const response = await apiClient.getMarket(marketId);
-      
+
       if (response.success && response.data) {
         const fetchedMarket = response.data;
 
@@ -77,9 +61,6 @@ export default function MarketDetailScreen() {
             ...o,
             currentPrice: pricesMap[o.id] ?? o.currentPrice ?? 0,
           }));
-          const firstPrice = (Object.values(fetchedMarket.prices)[0] as number) || 0.5;
-          setPriceHistory(generateMockPriceHistory(firstPrice, 30));
-          setOrderBook(generateMockOrderBook(firstPrice));
         }
 
         setMarket(fetchedMarket);
@@ -272,17 +253,6 @@ export default function MarketDetailScreen() {
           )}
         </View>
 
-        {/* Price History Chart */}
-        <View style={styles.probabilitySection}>
-          <Text style={styles.sectionTitle}>Price History</Text>
-          <PriceChart data={priceHistory} />
-        </View>
-
-        {/* Volume Chart */}
-        <View style={styles.volumeSection}>
-          <VolumeChart data={volumeData} />
-        </View>
-
         {/* Market Info */}
         <View style={styles.infoSection}>
           <View style={styles.infoRow}>
@@ -339,7 +309,7 @@ export default function MarketDetailScreen() {
                 onPress={() => setSelectedOutcome(outcome.id)}
               >
                 <View style={styles.outcomeButtonHeader}>
-                  <View style={[styles.outcomeDot, { backgroundColor: outcome.color ?? '#888' }]} />
+                  <View style={[styles.outcomeDot, { backgroundColor: outcome.color ?? Colors.textMuted }]} />
                   <Text style={styles.outcomeName} numberOfLines={1}>{outcome.name}</Text>
                 </View>
                 <Text style={[styles.outcomePrice, { color: outcome.color ?? Colors.textSecondary }]}>
@@ -357,7 +327,7 @@ export default function MarketDetailScreen() {
             onChangeText={setCredits}
             keyboardType="numeric"
             placeholder="50"
-            placeholderTextColor="#666"
+            placeholderTextColor={Colors.textMuted}
           />
 
           {/* Quick Amounts */}
@@ -444,12 +414,6 @@ export default function MarketDetailScreen() {
           </Text>
         </View>
 
-        {/* Order Book */}
-        <OrderBook yesOrders={orderBook.yes} noOrders={orderBook.no} />
-
-        {/* Related News */}
-        <NewsLinks marketId={market.id} news={news} />
-
         {/* Comments Section */}
         <Comments
           marketId={market.id}
@@ -471,120 +435,88 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    padding: 16,
+    padding: Spacing.lg,
   },
   categoryBadge: {
     backgroundColor: Colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.sm,
     alignSelf: 'flex-start',
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   categoryText: {
     color: Colors.textSecondary,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     fontWeight: '600',
   },
   title: {
     color: Colors.textPrimary,
     fontSize: 24,
     fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   description: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: FontSize.md,
     lineHeight: 22,
-  },
-  probabilitySection: {
-    padding: 16,
-    paddingTop: 0,
-  },
-  volumeSection: {
-    padding: 16,
-    paddingTop: 0,
   },
   sectionTitle: {
     color: Colors.textPrimary,
-    fontSize: 16,
+    fontSize: FontSize.lg,
     fontWeight: '700',
-    marginBottom: 12,
-  },
-  probabilityBar: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 12,
-  },
-  probabilityContainer: {
-    height: 24,
-    backgroundColor: Colors.background,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  probabilityFill: {
-    height: '100%',
-    borderRadius: 12,
-  },
-  probabilityLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  probabilityText: {
-    fontSize: 14,
-    fontWeight: '700',
+    marginBottom: Spacing.md,
   },
   infoSection: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.lg,
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   infoLabel: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: FontSize.md,
   },
   infoValue: {
     color: Colors.textPrimary,
-    fontSize: 14,
+    fontSize: FontSize.md,
     fontWeight: '600',
   },
   tradingSection: {
-    padding: 16,
+    padding: Spacing.lg,
     backgroundColor: Colors.surface,
-    marginHorizontal: 16,
-    borderRadius: 16,
-    marginBottom: 16,
+    marginHorizontal: Spacing.lg,
+    borderRadius: Radius.lg,
+    marginBottom: Spacing.lg,
   },
   balanceContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
   },
   balanceLabel: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: FontSize.md,
   },
   balanceValue: {
     color: Colors.primary,
-    fontSize: 16,
+    fontSize: FontSize.lg,
     fontWeight: '700',
   },
   toggleContainer: {
     flexDirection: 'row',
     backgroundColor: Colors.background,
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 16,
+    borderRadius: Radius.md,
+    padding: Spacing.xs,
+    marginBottom: Spacing.lg,
   },
   toggleButton: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: Spacing.md,
     alignItems: 'center',
     borderRadius: 10,
   },
@@ -596,7 +528,7 @@ const styles = StyleSheet.create({
   },
   toggleText: {
     color: Colors.textSecondary,
-    fontSize: 16,
+    fontSize: FontSize.lg,
     fontWeight: '600',
   },
   toggleTextActive: {
@@ -604,24 +536,24 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: FontSize.md,
     fontWeight: '600',
-    marginBottom: 8,
-    marginTop: 8,
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.sm,
   },
   outcomesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   outcomeButton: {
     width: '48%',
     flexDirection: 'column',
     alignItems: 'flex-start',
     backgroundColor: Colors.background,
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
     borderWidth: 2,
     borderColor: 'transparent',
   },
@@ -641,60 +573,60 @@ const styles = StyleSheet.create({
   },
   outcomeName: {
     color: Colors.textPrimary,
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontWeight: '500',
     marginLeft: 6,
     flexShrink: 1,
   },
   outcomePrice: {
-    fontSize: 20,
+    fontSize: FontSize.xl,
     fontWeight: '700',
-    marginLeft: 16,
+    marginLeft: Spacing.lg,
   },
   quantityInput: {
     backgroundColor: Colors.background,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: Radius.md,
+    padding: Spacing.lg,
     color: Colors.textPrimary,
-    fontSize: 18,
+    fontSize: FontSize.xl,
     fontWeight: '600',
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   quickAmounts: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
   },
   quickAmountButton: {
     flex: 1,
     backgroundColor: Colors.background,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     paddingVertical: 10,
     alignItems: 'center',
   },
   quickAmountText: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: FontSize.md,
     fontWeight: '600',
   },
   costSummary: {
     backgroundColor: Colors.background,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: Radius.md,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
   },
   costRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   costLabel: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: FontSize.md,
   },
   costValue: {
     color: Colors.textPrimary,
-    fontSize: 14,
+    fontSize: FontSize.md,
     fontWeight: '600',
   },
   costValuePositive: {
@@ -703,8 +635,8 @@ const styles = StyleSheet.create({
   payoutRow: {
     borderTopWidth: 1,
     borderTopColor: Colors.border,
-    paddingTop: 8,
-    marginTop: 4,
+    paddingTop: Spacing.sm,
+    marginTop: Spacing.xs,
   },
   payoutLabel: {
     fontWeight: '600',
@@ -715,8 +647,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   executeButton: {
-    borderRadius: 12,
-    paddingVertical: 16,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.lg,
     alignItems: 'center',
   },
   executeBuy: {
@@ -730,16 +662,16 @@ const styles = StyleSheet.create({
   },
   executeButtonText: {
     color: Colors.textPrimary,
-    fontSize: 16,
+    fontSize: FontSize.lg,
     fontWeight: '700',
   },
   disclaimer: {
-    paddingVertical: 20,
+    paddingVertical: Spacing.xl,
     alignItems: 'center',
   },
   disclaimerText: {
     color: Colors.textMuted,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
   centerContent: {
     justifyContent: 'center',
@@ -747,19 +679,19 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     color: Colors.textSecondary,
-    fontSize: 14,
-    marginTop: 12,
+    fontSize: FontSize.md,
+    marginTop: Spacing.md,
   },
   errorText: {
     color: Colors.danger,
-    fontSize: 14,
+    fontSize: FontSize.md,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
   },
   retryButton: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+    paddingHorizontal: Spacing.xxl,
+    paddingVertical: Spacing.md,
     borderRadius: 10,
   },
   retryButtonText: {
@@ -771,15 +703,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: Colors.surface,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 16,
-    padding: 16,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
   },
   challengeLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Spacing.md,
     flex: 1,
   },
   challengeIcon: {
@@ -787,12 +719,12 @@ const styles = StyleSheet.create({
   },
   challengeTitle: {
     color: Colors.textPrimary,
-    fontSize: 16,
+    fontSize: FontSize.lg,
     fontWeight: '700',
   },
   challengeSubtitle: {
     color: Colors.textSecondary,
-    fontSize: 13,
+    fontSize: FontSize.sm,
     marginTop: 2,
   },
   challengeArrow: {
@@ -802,7 +734,7 @@ const styles = StyleSheet.create({
   },
   proposedBy: {
     color: Colors.textMuted,
-    fontSize: 12,
-    marginTop: 8,
+    fontSize: FontSize.xs,
+    marginTop: Spacing.sm,
   },
 });

@@ -4,7 +4,7 @@ import {
   ActivityIndicator, RefreshControl, Alert, Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../lib/colors';
+import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
 import { apiClient } from '../../lib/api-client';
 import { getStoredUser } from '../../lib/auth';
 
@@ -65,9 +65,9 @@ function TournamentDetailModal({
   const myRank = myEntry ? leaderboard.indexOf(myEntry) + 1 : null;
 
   const getRankDisplay = (rank: number) => {
-    if (rank === 1) return { icon: 'trophy', color: '#FFD700' };
-    if (rank === 2) return { icon: 'medal-outline', color: '#C0C0C0' };
-    if (rank === 3) return { icon: 'ribbon-outline', color: '#CD7F32' };
+    if (rank === 1) return { icon: 'trophy', color: Colors.gold };
+    if (rank === 2) return { icon: 'medal-outline', color: Colors.silver };
+    if (rank === 3) return { icon: 'ribbon-outline', color: Colors.bronze };
     return null;
   };
 
@@ -139,7 +139,7 @@ function TournamentDetailModal({
           {/* Leaderboard */}
           <Text style={detailStyles.leaderboardTitle}>Leaderboard</Text>
           {loading ? (
-            <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 20 }} />
+            <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: Spacing.xl }} />
           ) : leaderboard.length === 0 ? (
             <Text style={detailStyles.emptyText}>No participants yet</Text>
           ) : (
@@ -254,7 +254,7 @@ export default function TournamentsScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'ACTIVE': return Colors.primary;
-      case 'UPCOMING': return '#F59E0B';
+      case 'UPCOMING': return Colors.warning;
       default: return Colors.textSecondary;
     }
   };
@@ -475,7 +475,7 @@ function renderTournamentCard(
           onPress={(e) => { e.stopPropagation?.(); ctx.handleJoin(tournament); }}
         >
           {isJoining ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={Colors.textPrimary} />
           ) : alreadyJoined ? (
             <Text style={styles.joinButtonText}>Joined ✓</Text>
           ) : (
@@ -497,36 +497,36 @@ function renderTournamentCard(
 // ─── Detail Modal Styles ─────────────────────────────────────────────────────
 
 const detailStyles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  container: { backgroundColor: Colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%', paddingBottom: 32 },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20, paddingBottom: 8 },
-  title: { fontSize: 20, fontWeight: '700', color: Colors.textPrimary },
-  subtitle: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
-  closeBtn: { padding: 4 },
-  myRankBanner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 20, backgroundColor: Colors.background, borderRadius: 12, padding: 14, marginBottom: 12, borderLeftWidth: 4, borderLeftColor: Colors.primary },
-  myRankLabel: { color: Colors.textSecondary, fontSize: 14 },
+  overlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
+  container: { backgroundColor: Colors.surface, borderTopLeftRadius: Spacing.xxl, borderTopRightRadius: Spacing.xxl, maxHeight: '90%', paddingBottom: Spacing.xxxl },
+  header: { flexDirection: 'row', alignItems: 'center', padding: Spacing.xl, paddingBottom: Spacing.sm },
+  title: { fontSize: Spacing.xl, fontWeight: '700', color: Colors.textPrimary },
+  subtitle: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
+  closeBtn: { padding: Spacing.xs },
+  myRankBanner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: Spacing.xl, backgroundColor: Colors.background, borderRadius: Radius.md, padding: 14, marginBottom: Spacing.md, borderLeftWidth: 4, borderLeftColor: Colors.primary },
+  myRankLabel: { color: Colors.textSecondary, fontSize: FontSize.md },
   myRankRight: { alignItems: 'flex-end' },
-  myRankValue: { color: Colors.primary, fontSize: 22, fontWeight: '700' },
-  myPnl: { fontSize: 13, fontWeight: '600' },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 20, paddingVertical: 12 },
+  myRankValue: { color: Colors.primary, fontSize: FontSize.xxl, fontWeight: '700' },
+  myPnl: { fontSize: FontSize.sm, fontWeight: '600' },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md },
   statBox: { alignItems: 'center' },
-  statValue: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
-  statLabel: { fontSize: 11, color: Colors.textSecondary, marginTop: 2 },
-  prizesRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, paddingHorizontal: 20, marginBottom: 12 },
-  prizeChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, gap: 6 },
-  prizeEmoji: { fontSize: 16 },
-  prizeAmount: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
-  leaderboardTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, paddingHorizontal: 20, marginTop: 8, marginBottom: 8 },
-  emptyText: { color: Colors.textSecondary, textAlign: 'center', marginTop: 20, fontSize: 14 },
-  leaderboardList: { paddingHorizontal: 20, maxHeight: 300 },
+  statValue: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.textPrimary },
+  statLabel: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
+  prizesRow: { flexDirection: 'row', justifyContent: 'center', gap: Spacing.md, paddingHorizontal: Spacing.xl, marginBottom: Spacing.md },
+  prizeChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, paddingHorizontal: Spacing.md, paddingVertical: 6, borderRadius: Radius.sm, gap: 6 },
+  prizeEmoji: { fontSize: FontSize.lg },
+  prizeAmount: { fontSize: FontSize.md, fontWeight: '700', color: Colors.textPrimary },
+  leaderboardTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.textPrimary, paddingHorizontal: Spacing.xl, marginTop: Spacing.sm, marginBottom: Spacing.sm },
+  emptyText: { color: Colors.textSecondary, textAlign: 'center', marginTop: Spacing.xl, fontSize: FontSize.md },
+  leaderboardList: { paddingHorizontal: Spacing.xl, maxHeight: 300 },
   lbRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 10 },
-  lbRowMe: { backgroundColor: Colors.primary + '15', marginHorizontal: -8, paddingHorizontal: 8, borderRadius: 8 },
+  lbRowMe: { backgroundColor: Colors.primaryMuted, marginHorizontal: -Spacing.sm, paddingHorizontal: Spacing.sm, borderRadius: Radius.sm },
   lbRankCol: { width: 28, alignItems: 'center' },
   lbRankText: { fontSize: 15, fontWeight: '700', color: Colors.textSecondary },
-  lbAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.surfaceHighlight, alignItems: 'center', justifyContent: 'center' },
-  lbAvatarText: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
-  lbName: { flex: 1, fontSize: 14, fontWeight: '600', color: Colors.textPrimary },
-  lbPnl: { fontSize: 14, fontWeight: '700' },
+  lbAvatar: { width: Spacing.xxxl, height: Spacing.xxxl, borderRadius: Spacing.lg, backgroundColor: Colors.surfaceHighlight, alignItems: 'center', justifyContent: 'center' },
+  lbAvatarText: { fontSize: FontSize.md, fontWeight: '700', color: Colors.textPrimary },
+  lbName: { flex: 1, fontSize: FontSize.md, fontWeight: '600', color: Colors.textPrimary },
+  lbPnl: { fontSize: FontSize.md, fontWeight: '700' },
 });
 
 // ─── Main Styles ─────────────────────────────────────────────────────────────
@@ -534,58 +534,58 @@ const detailStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   centered: { justifyContent: 'center', alignItems: 'center' },
-  content: { flex: 1, paddingHorizontal: 16 },
-  section: { marginBottom: 8, marginTop: 16 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: 12 },
+  content: { flex: 1, paddingHorizontal: Spacing.lg },
+  section: { marginBottom: Spacing.sm, marginTop: Spacing.lg },
+  sectionTitle: { fontSize: FontSize.xl, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: Spacing.md },
 
   // My Tournaments
-  myTournamentCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, borderRadius: 12, padding: 16, marginBottom: 8, borderLeftWidth: 4, borderLeftColor: Colors.primary },
+  myTournamentCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, borderRadius: Radius.md, padding: Spacing.lg, marginBottom: Spacing.sm, borderLeftWidth: 4, borderLeftColor: Colors.primary },
   myTournamentLeft: { flex: 1 },
   myTournamentName: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
   myTournamentMeta: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
-  myTournamentRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  viewLeaderboardText: { fontSize: 13, color: Colors.primary, fontWeight: '600' },
+  myTournamentRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  viewLeaderboardText: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' },
 
   // Tournament Card
-  tournamentCard: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginBottom: 12 },
+  tournamentCard: { backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.lg, marginBottom: Spacing.md },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  typeBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  typeIcon: { fontSize: 14, marginRight: 4 },
-  typeText: { fontSize: 11, fontWeight: '600', color: Colors.textSecondary },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  statusText: { fontSize: 11, fontWeight: '700' },
-  tournamentName: { fontSize: 18, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: 4 },
-  tournamentDescription: { fontSize: 13, color: Colors.textSecondary, marginBottom: 12 },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 12, borderTopWidth: 1, borderBottomWidth: 1, borderColor: Colors.border, marginBottom: 12 },
+  typeBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, paddingHorizontal: 10, paddingVertical: Spacing.xs, borderRadius: Radius.sm },
+  typeIcon: { fontSize: FontSize.md, marginRight: Spacing.xs },
+  typeText: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textSecondary },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: Spacing.xs, borderRadius: Radius.sm },
+  statusText: { fontSize: FontSize.xs, fontWeight: '700' },
+  tournamentName: { fontSize: FontSize.xl, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: Spacing.xs },
+  tournamentDescription: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.md },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: Spacing.md, borderTopWidth: 1, borderBottomWidth: 1, borderColor: Colors.border, marginBottom: Spacing.md },
   stat: { alignItems: 'center' },
-  statValue: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
-  statLabel: { fontSize: 11, color: Colors.textSecondary, marginTop: 2 },
-  prizesInline: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginBottom: 12 },
-  prizeInlineItem: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  joinButton: { backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', minHeight: 50, gap: 8 },
+  statValue: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.textPrimary },
+  statLabel: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
+  prizesInline: { flexDirection: 'row', justifyContent: 'center', gap: Spacing.lg, marginBottom: Spacing.md },
+  prizeInlineItem: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textSecondary },
+  joinButton: { backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 14, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', minHeight: 50, gap: Spacing.sm },
   joinedButton: { backgroundColor: Colors.surfaceHighlight },
-  joinButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  joinButtonFee: { fontSize: 14, color: 'rgba(255,255,255,0.8)' },
+  joinButtonText: { color: Colors.textPrimary, fontSize: FontSize.lg, fontWeight: '700' },
+  joinButtonFee: { fontSize: FontSize.md, color: 'rgba(255,255,255,0.8)' },
 
   // Completed
-  completedCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, borderRadius: 12, padding: 14, marginBottom: 8 },
+  completedCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, borderRadius: Radius.md, padding: 14, marginBottom: Spacing.sm },
   completedName: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
   completedMeta: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
 
   // Rules
-  rulesCard: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginBottom: 24, marginTop: 8 },
-  rulesTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: 16 },
-  ruleItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  ruleNumber: { width: 24, height: 24, borderRadius: 12, backgroundColor: Colors.primary, color: '#fff', textAlign: 'center', lineHeight: 24, fontSize: 12, fontWeight: 'bold', marginRight: 12, overflow: 'hidden' },
-  ruleText: { flex: 1, fontSize: 14, color: Colors.textSecondary },
+  rulesCard: { backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.lg, marginBottom: Spacing.xxl, marginTop: Spacing.sm },
+  rulesTitle: { fontSize: FontSize.lg, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: Spacing.lg },
+  ruleItem: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md },
+  ruleNumber: { width: Spacing.xxl, height: Spacing.xxl, borderRadius: Radius.md, backgroundColor: Colors.primary, color: Colors.textPrimary, textAlign: 'center', lineHeight: Spacing.xxl, fontSize: 12, fontWeight: 'bold', marginRight: Spacing.md, overflow: 'hidden' },
+  ruleText: { flex: 1, fontSize: FontSize.md, color: Colors.textSecondary },
 
   // States
   errorState: { alignItems: 'center', padding: 40 },
-  errorText: { color: Colors.danger, fontSize: 14, marginBottom: 16, textAlign: 'center' },
-  retryButton: { backgroundColor: Colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 },
-  retryText: { color: '#fff', fontWeight: '600' },
+  errorText: { color: Colors.danger, fontSize: FontSize.md, marginBottom: Spacing.lg, textAlign: 'center' },
+  retryButton: { backgroundColor: Colors.primary, paddingHorizontal: Spacing.xxl, paddingVertical: Spacing.md, borderRadius: 10 },
+  retryText: { color: Colors.textPrimary, fontWeight: '600' },
   emptyState: { alignItems: 'center', padding: 60 },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: 8 },
-  emptyText: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center' },
+  emptyIcon: { fontSize: 48, marginBottom: Spacing.md },
+  emptyTitle: { fontSize: FontSize.xl, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: Spacing.sm },
+  emptyText: { fontSize: FontSize.md, color: Colors.textSecondary, textAlign: 'center' },
 });

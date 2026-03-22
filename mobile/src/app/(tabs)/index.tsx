@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Colors } from '../../lib/colors';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
 
 import { TrendingMarkets } from '../../lib/components';
 import { apiClient, type Market } from '../../lib/api-client';
@@ -28,9 +29,9 @@ export default function MarketsScreen() {
         setLoading(true);
       }
       setError(null);
-      
+
       const response = await apiClient.getMarkets();
-      
+
       if (response.success && response.data) {
         setMarkets(response.data);
       } else {
@@ -66,9 +67,9 @@ export default function MarketsScreen() {
     const now = new Date();
     const expiry = new Date(expiresAt);
     const diff = expiry.getTime() - now.getTime();
-    
+
     if (diff <= 0) return 'Expired';
-    
+
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     if (days > 0) return `${days}d left`;
     return 'Expiring soon';
@@ -103,14 +104,14 @@ export default function MarketsScreen() {
           <Text style={styles.headerSubtitle}>Predict the future, earn credits</Text>
         </View>
         <View style={styles.balanceBadge}>
-          <Text style={styles.balanceIcon}>🔶</Text>
+          <Ionicons name="diamond-outline" size={16} color={Colors.warning} style={{ marginRight: 6 }} />
           <Text style={styles.balanceText}>{userBalance != null ? userBalance.toLocaleString() : '—'}</Text>
         </View>
       </View>
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
-        <Text style={styles.searchIcon}>🔍</Text>
+        <Ionicons name="search-outline" size={16} color={Colors.textMuted} style={{ marginRight: 10 }} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search markets..."
@@ -120,14 +121,14 @@ export default function MarketsScreen() {
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Text style={styles.clearButton}>✕</Text>
+            <Ionicons name="close-outline" size={18} color={Colors.textSecondary} style={{ padding: Spacing.xs }} />
           </TouchableOpacity>
         )}
       </View>
 
       {/* Categories */}
-      <ScrollView 
-        horizontal 
+      <ScrollView
+        horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.categoriesContainer}
         contentContainerStyle={styles.categoriesContent}
@@ -158,7 +159,7 @@ export default function MarketsScreen() {
       <ScrollView
         style={styles.marketsList}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#22C55E" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
         }
       >
         {filteredMarkets.map((market) => (
@@ -184,7 +185,7 @@ export default function MarketsScreen() {
                 const pct = Math.round(price * 100);
                 return (
                   <View key={outcome.id} style={styles.outcomeItem}>
-                    <View style={[styles.outcomeDot, { backgroundColor: outcome.color ?? '#888' }]} />
+                    <View style={[styles.outcomeDot, { backgroundColor: outcome.color ?? Colors.textMuted }]} />
                     <Text style={styles.outcomeName} numberOfLines={1}>{outcome.name}</Text>
                     <View style={styles.outcomePriceWrap}>
                       <Text style={[styles.outcomePrice, { color: pct >= 50 ? Colors.primary : Colors.textSecondary }]}>
@@ -212,7 +213,7 @@ export default function MarketsScreen() {
         {/* Disclaimer */}
         <View style={styles.disclaimer}>
           <Text style={styles.disclaimerText}>
-            ⚠️ Credits have no real-world value. This is not gambling.
+            Credits have no real-world value. This is not gambling.
           </Text>
         </View>
       </ScrollView>
@@ -229,17 +230,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: FontSize.title,
     fontWeight: 'bold',
     color: Colors.textPrimary,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: FontSize.md,
     color: Colors.textSecondary,
     marginTop: 2,
   },
@@ -247,40 +248,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  balanceIcon: {
-    fontSize: 16,
-    marginRight: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.xl,
   },
   balanceText: {
     color: Colors.primary,
-    fontSize: 16,
+    fontSize: FontSize.lg,
     fontWeight: '700',
   },
   categoriesContainer: {
     maxHeight: 50,
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   categoriesContent: {
-    paddingHorizontal: 16,
-    gap: 8,
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.sm,
   },
   categoryButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.xl,
     backgroundColor: Colors.surface,
-    marginRight: 8,
+    marginRight: Spacing.sm,
   },
   categoryButtonActive: {
     backgroundColor: Colors.primary,
   },
   categoryText: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: FontSize.md,
     fontWeight: '600',
   },
   categoryTextActive: {
@@ -288,55 +285,55 @@ const styles = StyleSheet.create({
   },
   marketsList: {
     flex: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing.lg,
   },
   marketCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   marketHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   categoryBadge: {
     backgroundColor: Colors.surfaceHighlight,
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.sm,
   },
   categoryBadgeText: {
     color: Colors.textSecondary,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     fontWeight: '600',
   },
   timeRemaining: {
-    color: '#FF6B6B',
-    fontSize: 12,
+    color: Colors.danger,
+    fontSize: FontSize.xs,
     fontWeight: '600',
   },
   marketTitle: {
     color: Colors.textPrimary,
-    fontSize: 18,
+    fontSize: FontSize.xl,
     fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   marketDescription: {
     color: Colors.textSecondary,
-    fontSize: 14,
-    marginBottom: 16,
+    fontSize: FontSize.md,
+    marginBottom: Spacing.lg,
     lineHeight: 20,
   },
   outcomesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     backgroundColor: Colors.background,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     padding: 10,
-    marginBottom: 12,
+    marginBottom: Spacing.md,
     gap: 6,
   },
   outcomeItem: {
@@ -345,21 +342,21 @@ const styles = StyleSheet.create({
     width: '48%',
   },
   outcomeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: Spacing.sm,
+    height: Spacing.sm,
+    borderRadius: Spacing.xs,
     marginRight: 6,
     flexShrink: 0,
   },
   outcomeName: {
     color: Colors.textSecondary,
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontWeight: '500',
-    marginRight: 4,
+    marginRight: Spacing.xs,
     flexShrink: 1,
   },
   outcomePrice: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontWeight: '700',
     flexShrink: 0,
   },
@@ -367,7 +364,7 @@ const styles = StyleSheet.create({
     marginLeft: 'auto' as any,
   },
   moreOutcomes: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     color: Colors.textMuted,
     paddingVertical: 2,
     paddingLeft: 14,
@@ -379,42 +376,33 @@ const styles = StyleSheet.create({
   },
   expiryText: {
     color: Colors.textMuted,
-    fontSize: 11,
+    fontSize: FontSize.xs,
   },
   volumeText: {
     color: Colors.textSecondary,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
   disclaimer: {
-    paddingVertical: 20,
+    paddingVertical: Spacing.xl,
     alignItems: 'center',
   },
   disclaimerText: {
     color: Colors.textMuted,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 12,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    borderRadius: Radius.md,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  searchIcon: {
-    fontSize: 16,
-    marginRight: 10,
-  },
   searchInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: FontSize.lg,
     color: Colors.textPrimary,
-  },
-  clearButton: {
-    fontSize: 16,
-    color: Colors.textSecondary,
-    padding: 4,
   },
 });

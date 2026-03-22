@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, RefreshControl,
 } from 'react-native';
-import { Colors } from '../../lib/colors';
+import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
 import { apiClient } from '../../lib/api-client';
 
 interface Achievement {
@@ -206,24 +206,24 @@ const styles = StyleSheet.create({
   errorText: {
     color: Colors.danger,
     fontSize: 15,
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   retryButton: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing.xxl,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: Radius.md,
   },
   retryText: {
-    color: '#fff',
+    color: Colors.textPrimary,
     fontWeight: '700',
   },
   statsCard: {
     flexDirection: 'row',
     backgroundColor: Colors.surface,
-    margin: 16,
-    borderRadius: 16,
-    padding: 20,
+    margin: Spacing.lg,
+    borderRadius: Radius.lg,
+    padding: Spacing.xl,
   },
   statItem: {
     flex: 1,
@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     color: Colors.textSecondary,
-    marginTop: 4,
+    marginTop: Spacing.xs,
   },
   rewardValue: {
     color: Colors.primary,
@@ -245,27 +245,27 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     backgroundColor: Colors.border,
-    marginVertical: 4,
+    marginVertical: Spacing.xs,
   },
   categoriesScroll: {
     maxHeight: 50,
   },
   categoriesContent: {
-    paddingHorizontal: 16,
-    gap: 8,
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.sm,
   },
   categoryButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.xl,
     backgroundColor: Colors.surface,
-    marginRight: 8,
+    marginRight: Spacing.sm,
   },
   categoryButtonActive: {
     backgroundColor: Colors.primary,
   },
   categoryText: {
-    fontSize: 14,
+    fontSize: FontSize.md,
     color: Colors.textSecondary,
     fontWeight: '600',
   },
@@ -274,30 +274,30 @@ const styles = StyleSheet.create({
   },
   achievementsList: {
     flex: 1,
-    paddingHorizontal: 16,
-    marginTop: 12,
+    paddingHorizontal: Spacing.lg,
+    marginTop: Spacing.md,
   },
   emptyState: {
     alignItems: 'center',
-    padding: 32,
+    padding: Spacing.xxxl,
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
   },
   emptyIcon: {
     fontSize: 40,
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   emptyText: {
     color: Colors.textSecondary,
-    fontSize: 16,
+    fontSize: FontSize.lg,
   },
   achievementCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: Radius.md,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
     opacity: 0.7,
   },
   achievementUnlocked: {
@@ -324,27 +324,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   achievementTitle: {
-    fontSize: 16,
+    fontSize: FontSize.lg,
     fontWeight: '600',
     color: Colors.textPrimary,
     marginBottom: 2,
   },
   achievementDescription: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     color: Colors.textSecondary,
   },
   textLocked: {
     color: Colors.textSecondary,
   },
   rewardContainer: {
-    marginLeft: 12,
+    marginLeft: Spacing.md,
   },
   rewardBadge: {
     alignItems: 'center',
     backgroundColor: Colors.background,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: Radius.md,
   },
   rewardAmount: {
     fontSize: 12,

@@ -1,12 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Colors } from '../../lib/colors';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
 import { signOut } from '../../lib/auth';
 import { apiClient } from '../../lib/api-client';
 
 interface SettingItem {
-  icon: string;
+  icon: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle?: string;
   type: 'toggle' | 'navigation' | 'action';
@@ -59,33 +60,33 @@ export default function SettingsScreen() {
   };
 
   const generalSettings: SettingItem[] = [
-    { 
-      icon: '🔔', 
-      title: 'Notifications', 
+    {
+      icon: 'notifications-outline',
+      title: 'Notifications',
       subtitle: 'Tournament reminders, friend activity',
       type: 'toggle',
       value: notifications,
       onToggle: setNotifications,
     },
-    { 
-      icon: '🔊', 
-      title: 'Sound Effects', 
+    {
+      icon: 'volume-high-outline',
+      title: 'Sound Effects',
       subtitle: 'Market updates, achievements',
       type: 'toggle',
       value: soundEffects,
       onToggle: setSoundEffects,
     },
-    { 
-      icon: '📳', 
-      title: 'Haptic Feedback', 
+    {
+      icon: 'phone-portrait-outline',
+      title: 'Haptic Feedback',
       subtitle: 'Vibration on actions',
       type: 'toggle',
       value: hapticFeedback,
       onToggle: setHapticFeedback,
     },
-    { 
-      icon: '🌙', 
-      title: 'Dark Mode', 
+    {
+      icon: 'moon-outline',
+      title: 'Dark Mode',
       subtitle: 'Use dark theme',
       type: 'toggle',
       value: darkMode,
@@ -94,22 +95,22 @@ export default function SettingsScreen() {
   ];
 
   const accountSettings: SettingItem[] = [
-    { 
-      icon: '👤', 
-      title: 'Edit Profile', 
+    {
+      icon: 'person-outline',
+      title: 'Edit Profile',
       subtitle: 'Change username, avatar',
       type: 'navigation',
       onPress: () => Alert.alert('Edit Profile', 'Profile editing coming soon'),
     },
     {
-      icon: '🔒',
+      icon: 'lock-closed-outline',
       title: 'Change Password',
       subtitle: 'Update your password',
       type: 'navigation',
       onPress: () => Alert.alert('Change Password', 'Password change coming soon'),
     },
     {
-      icon: '📧',
+      icon: 'mail-outline',
       title: 'Email Settings',
       subtitle: 'Manage email preferences',
       type: 'navigation',
@@ -119,27 +120,27 @@ export default function SettingsScreen() {
 
   const supportSettings: SettingItem[] = [
     {
-      icon: '❓',
+      icon: 'help-circle-outline',
       title: 'Help Center',
       subtitle: 'FAQs and support',
       type: 'navigation',
       onPress: () => Alert.alert('Help', 'For support, email support@predictspinz.com'),
     },
     {
-      icon: '💬',
+      icon: 'chatbubble-outline',
       title: 'Contact Us',
       subtitle: 'Get help from our team',
       type: 'navigation',
       onPress: () => Linking.openURL('mailto:support@predictspinz.com'),
     },
     {
-      icon: '📜',
+      icon: 'document-text-outline',
       title: 'Terms of Service',
       type: 'navigation',
       onPress: () => Alert.alert('Terms of Service', 'Terms of service page coming soon'),
     },
     {
-      icon: '🔐',
+      icon: 'shield-checkmark-outline',
       title: 'Privacy Policy',
       type: 'navigation',
       onPress: () => Alert.alert('Privacy Policy', 'Privacy policy page coming soon'),
@@ -154,7 +155,7 @@ export default function SettingsScreen() {
       disabled={item.type === 'toggle'}
     >
       <View style={styles.settingIcon}>
-        <Text style={styles.iconText}>{item.icon}</Text>
+        <Ionicons name={item.icon} size={20} color={Colors.textSecondary} />
       </View>
       <View style={styles.settingContent}>
         <Text style={styles.settingTitle}>{item.title}</Text>
@@ -205,17 +206,17 @@ export default function SettingsScreen() {
           <View style={styles.sectionContent}>
             <TouchableOpacity style={styles.settingItem} onPress={handleSignOut}>
               <View style={[styles.settingIcon, styles.dangerIcon]}>
-                <Text style={styles.iconText}>🚪</Text>
+                <Ionicons name="log-out-outline" size={20} color={Colors.danger} />
               </View>
               <View style={styles.settingContent}>
                 <Text style={[styles.settingTitle, styles.dangerText]}>Sign Out</Text>
                 <Text style={styles.settingSubtitle}>Sign out of your account</Text>
               </View>
             </TouchableOpacity>
-            
+
             <TouchableOpacity style={styles.settingItem} onPress={handleDeleteAccount}>
               <View style={[styles.settingIcon, styles.dangerIcon]}>
-                <Text style={styles.iconText}>🗑️</Text>
+                <Ionicons name="trash-outline" size={20} color={Colors.danger} />
               </View>
               <View style={styles.settingContent}>
                 <Text style={[styles.settingTitle, styles.dangerText]}>Delete Account</Text>
@@ -248,49 +249,49 @@ const styles = StyleSheet.create({
   },
   appInfo: {
     alignItems: 'center',
-    paddingVertical: 32,
+    paddingVertical: Spacing.xxxl,
   },
   appName: {
-    fontSize: 28,
+    fontSize: FontSize.title,
     fontWeight: 'bold',
     color: Colors.primary,
-    marginBottom: 4,
+    marginBottom: Spacing.xs,
   },
   appVersion: {
-    fontSize: 14,
+    fontSize: FontSize.md,
     color: Colors.textSecondary,
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   appTagline: {
-    fontSize: 14,
+    fontSize: FontSize.md,
     color: Colors.textMuted,
     fontStyle: 'italic',
   },
   section: {
-    marginBottom: 24,
-    paddingHorizontal: 16,
+    marginBottom: Spacing.xxl,
+    paddingHorizontal: Spacing.lg,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontWeight: '600',
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 8,
-    marginLeft: 4,
+    marginBottom: Spacing.sm,
+    marginLeft: Spacing.xs,
   },
   dangerTitle: {
     color: Colors.danger,
   },
   sectionContent: {
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
   },
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: Spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
@@ -301,24 +302,21 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: Spacing.md + 2,
   },
   dangerIcon: {
-    backgroundColor: Colors.danger + '20',
-  },
-  iconText: {
-    fontSize: 20,
+    backgroundColor: Colors.dangerMuted,
   },
   settingContent: {
     flex: 1,
   },
   settingTitle: {
-    fontSize: 16,
+    fontSize: FontSize.lg,
     fontWeight: '500',
     color: Colors.textPrimary,
   },
   settingSubtitle: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     color: Colors.textSecondary,
     marginTop: 2,
   },
@@ -331,11 +329,11 @@ const styles = StyleSheet.create({
   },
   footer: {
     alignItems: 'center',
-    paddingVertical: 32,
+    paddingVertical: Spacing.xxxl,
     paddingBottom: 48,
   },
   footerText: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     color: Colors.textMuted,
     textAlign: 'center',
     lineHeight: 20,

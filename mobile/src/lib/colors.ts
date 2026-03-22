@@ -1,30 +1,171 @@
-// PredictSpinz Color Palette
+/**
+ * PredictSpinz Theme System
+ * Supports light + dark mode with consistent design tokens.
+ */
 
-export const Colors = {
+import { Appearance } from 'react-native';
+
+// ─── Spacing Scale ───────────────────────────────────────────────────────────
+export const Spacing = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+  xxxl: 32,
+} as const;
+
+// ─── Border Radius ───────────────────────────────────────────────────────────
+export const Radius = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  full: 999,
+} as const;
+
+// ─── Font Sizes ──────────────────────────────────────────────────────────────
+export const FontSize = {
+  xs: 11,
+  sm: 13,
+  md: 14,
+  lg: 16,
+  xl: 18,
+  xxl: 22,
+  title: 28,
+} as const;
+
+// ─── Theme Palettes ──────────────────────────────────────────────────────────
+
+const darkPalette = {
   // Backgrounds
-  background: '#1E1E2E',
-  surface: '#2D2D44',
-  surfaceHighlight: '#3D3D54',
-  
-  // Text
+  background: '#13131A',
+  surface: '#1E1E2E',
+  surfaceHighlight: '#2A2A3D',
+  card: '#1E1E2E',
+
+  // Text — improved contrast ratios
   textPrimary: '#FFFFFF',
-  textSecondary: '#A0A0B0',
-  textMuted: '#666666',
-  
+  textSecondary: '#B0B0C0',   // was #A0A0B0 — bumped for WCAG AA
+  textMuted: '#808090',       // was #666666 — bumped for accessibility
+
   // Accents
-  primary: '#22C55E',      // Green - success/buy
-  secondary: '#3B82F6',     // Blue - links/info
-  danger: '#EF4444',        // Red - sell/error
-  warning: '#F59E0B',       // Orange - warning
-  accent: '#8B5CF6',        // Purple - special
-  
+  primary: '#22C55E',
+  primaryMuted: 'rgba(34, 197, 94, 0.15)',
+  secondary: '#3B82F6',
+  danger: '#EF4444',
+  dangerMuted: 'rgba(239, 68, 68, 0.15)',
+  warning: '#F59E0B',
+  warningMuted: 'rgba(245, 158, 11, 0.15)',
+  accent: '#8B5CF6',
+
   // Outcomes
-  yes: '#22C55E',          // Green for YES
-  no: '#EF4444',           // Red for NO
-  
-  // Misc
-  border: '#3D3D54',
-  overlay: 'rgba(0, 0, 0, 0.5)',
+  yes: '#22C55E',
+  no: '#EF4444',
+
+  // Medals
+  gold: '#FFD700',
+  silver: '#C0C0C0',
+  bronze: '#CD7F32',
+
+  // Structure
+  border: '#2A2A3D',
+  overlay: 'rgba(0, 0, 0, 0.6)',
+  inputBg: '#13131A',
+
+  // Tab bar
+  tabBar: '#1E1E2E',
+  tabBorder: '#2A2A3D',
+  tabActive: '#22C55E',
+  tabInactive: '#808090',
+
+  // Header
+  headerBg: '#13131A',
+  headerText: '#FFFFFF',
+
+  // Status bar
+  statusBarStyle: 'light' as const,
 };
+
+const lightPalette = {
+  // Backgrounds
+  background: '#F5F5F7',
+  surface: '#FFFFFF',
+  surfaceHighlight: '#F0F0F5',
+  card: '#FFFFFF',
+
+  // Text
+  textPrimary: '#1A1A2E',
+  textSecondary: '#6B7280',
+  textMuted: '#9CA3AF',
+
+  // Accents
+  primary: '#16A34A',
+  primaryMuted: 'rgba(22, 163, 74, 0.10)',
+  secondary: '#2563EB',
+  danger: '#DC2626',
+  dangerMuted: 'rgba(220, 38, 38, 0.10)',
+  warning: '#D97706',
+  warningMuted: 'rgba(217, 119, 6, 0.10)',
+  accent: '#7C3AED',
+
+  // Outcomes
+  yes: '#16A34A',
+  no: '#DC2626',
+
+  // Medals
+  gold: '#D4A017',
+  silver: '#9E9E9E',
+  bronze: '#A0522D',
+
+  // Structure
+  border: '#E5E7EB',
+  overlay: 'rgba(0, 0, 0, 0.4)',
+  inputBg: '#F5F5F7',
+
+  // Tab bar
+  tabBar: '#FFFFFF',
+  tabBorder: '#E5E7EB',
+  tabActive: '#16A34A',
+  tabInactive: '#9CA3AF',
+
+  // Header
+  headerBg: '#FFFFFF',
+  headerText: '#1A1A2E',
+
+  // Status bar
+  statusBarStyle: 'dark' as const,
+};
+
+// ─── Theme Manager ───────────────────────────────────────────────────────────
+
+export type ThemePalette = Omit<typeof darkPalette, 'statusBarStyle'> & { statusBarStyle: 'light' | 'dark' };
+export type ThemeMode = 'light' | 'dark' | 'system';
+
+let currentMode: ThemeMode = 'light';
+
+export function setThemeMode(mode: ThemeMode) {
+  currentMode = mode;
+}
+
+export function getThemeMode(): ThemeMode {
+  return currentMode;
+}
+
+function resolveMode(): 'light' | 'dark' {
+  if (currentMode === 'system') {
+    return Appearance.getColorScheme() === 'dark' ? 'dark' : 'light';
+  }
+  return currentMode;
+}
+
+/** Active color palette — call this to get current colors */
+export function getColors(): ThemePalette {
+  return resolveMode() === 'dark' ? darkPalette : lightPalette;
+}
+
+// Default export for backward compatibility — defaults to light mode
+export const Colors = lightPalette;
 
 export default Colors;

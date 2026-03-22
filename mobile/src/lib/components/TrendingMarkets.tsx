@@ -6,7 +6,7 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { Colors } from '../colors';
+import { Colors, Spacing, Radius, FontSize } from '../colors';
 import { useRouter } from 'expo-router';
 
 export interface TrendingMarket {
@@ -77,7 +77,7 @@ export const TrendingMarkets: React.FC<TrendingMarketsProps> = ({
               <Text style={styles.category}>{market.category}</Text>
               <Text style={styles.trendIcon}>{getTrendIcon(market.change24h)}</Text>
             </View>
-            
+
             <Text style={styles.marketTitle} numberOfLines={2}>
               {market.title}
             </Text>
@@ -126,7 +126,7 @@ export const TrendingMarkets: React.FC<TrendingMarketsProps> = ({
 // Mock data generator
 export const generateMockTrendingMarkets = (): TrendingMarket[] => {
   const categories = ['Politics', 'Crypto', 'Sports', 'Tech', 'Science', 'Entertainment'];
-  
+
   const mockMarkets: TrendingMarket[] = [
     {
       id: 'trending-1',
@@ -185,35 +185,35 @@ export const generateMockTrendingMarkets = (): TrendingMarket[] => {
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 8,
+    marginTop: Spacing.sm,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   title: {
-    fontSize: 18,
+    fontSize: FontSize.xl,
     fontWeight: 'bold',
     color: Colors.textPrimary,
   },
   seeAll: {
-    fontSize: 14,
+    fontSize: FontSize.md,
     color: Colors.primary,
     fontWeight: '600',
   },
   scrollContent: {
-    paddingHorizontal: 12,
-    paddingRight: 16,
+    paddingHorizontal: Spacing.md,
+    paddingRight: Spacing.lg,
   },
   marketCard: {
     width: 200,
     backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 14,
-    marginHorizontal: 4,
+    borderRadius: Radius.md,
+    padding: Spacing.md + 2,
+    marginHorizontal: Spacing.xs,
     borderWidth: 1,
     borderColor: Colors.border,
   },
@@ -221,48 +221,48 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   category: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     fontWeight: '600',
     color: Colors.primary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   trendIcon: {
-    fontSize: 14,
+    fontSize: FontSize.md,
   },
   marketTitle: {
-    fontSize: 14,
+    fontSize: FontSize.md,
     fontWeight: '600',
     color: Colors.textPrimary,
     lineHeight: 18,
-    marginBottom: 12,
+    marginBottom: Spacing.md,
     minHeight: 36,
   },
   priceContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   priceItem: {
     flex: 1,
   },
   priceLabel: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     color: Colors.textSecondary,
     marginBottom: 2,
   },
   price: {
-    fontSize: 16,
+    fontSize: FontSize.lg,
     fontWeight: 'bold',
   },
   yesPrice: {
-    color: '#22C55E',
+    color: Colors.yes,
   },
   noPrice: {
-    color: '#EF4444',
+    color: Colors.no,
   },
   statsRow: {
     flexDirection: 'row',
@@ -285,9 +285,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   positive: {
-    color: '#22C55E',
+    color: Colors.yes,
   },
   negative: {
-    color: '#EF4444',
+    color: Colors.no,
   },
 });

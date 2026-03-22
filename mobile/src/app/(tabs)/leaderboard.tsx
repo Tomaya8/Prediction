@@ -4,7 +4,7 @@ import {
   ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../lib/colors';
+import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
 import { apiClient } from '../../lib/api-client';
 
 interface LeaderboardEntry {
@@ -64,9 +64,9 @@ export default function LeaderboardScreen() {
   };
 
   const getRankColor = (rank: number) => {
-    if (rank === 1) return '#FFD700';
-    if (rank === 2) return '#C0C0C0';
-    if (rank === 3) return '#CD7F32';
+    if (rank === 1) return Colors.gold;
+    if (rank === 2) return Colors.silver;
+    if (rank === 3) return Colors.bronze;
     return Colors.textSecondary;
   };
 
@@ -104,14 +104,14 @@ export default function LeaderboardScreen() {
           style={[styles.toggleButton, scoreType === 'credits' && styles.toggleActive]}
           onPress={() => setScoreType('credits')}
         >
-          <Ionicons name="diamond-outline" size={16} color={scoreType === 'credits' ? '#fff' : Colors.textSecondary} />
+          <Ionicons name="diamond-outline" size={16} color={scoreType === 'credits' ? Colors.textPrimary : Colors.textSecondary} />
           <Text style={[styles.toggleText, scoreType === 'credits' && styles.toggleTextActive]}>Credits</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.toggleButton, scoreType === 'roi' && styles.toggleActive]}
           onPress={() => setScoreType('roi')}
         >
-          <Ionicons name="trending-up-outline" size={16} color={scoreType === 'roi' ? '#fff' : Colors.textSecondary} />
+          <Ionicons name="trending-up-outline" size={16} color={scoreType === 'roi' ? Colors.textPrimary : Colors.textSecondary} />
           <Text style={[styles.toggleText, scoreType === 'roi' && styles.toggleTextActive]}>ROI</Text>
         </TouchableOpacity>
       </View>
@@ -131,7 +131,7 @@ export default function LeaderboardScreen() {
       >
         {leaderboard.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>🏆</Text>
+            <Ionicons name="trophy-outline" size={40} color={Colors.textMuted} style={{ marginBottom: Spacing.md }} />
             <Text style={styles.emptyText}>No rankings yet</Text>
             <Text style={styles.emptySubtext}>Start trading to appear on the leaderboard</Text>
           </View>
@@ -206,24 +206,24 @@ const styles = StyleSheet.create({
   errorText: {
     color: Colors.danger,
     fontSize: 15,
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   retryButton: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing.xxl,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: Radius.md,
   },
   retryText: {
-    color: '#fff',
+    color: Colors.textPrimary,
     fontWeight: '700',
   },
   toggleContainer: {
     flexDirection: 'row',
-    margin: 16,
+    margin: Spacing.lg,
     backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 4,
+    borderRadius: Radius.md,
+    padding: Spacing.xs,
   },
   toggleButton: {
     flex: 1,
@@ -239,27 +239,27 @@ const styles = StyleSheet.create({
   },
   toggleText: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: FontSize.md,
     fontWeight: '600',
   },
   toggleTextActive: {
-    color: '#fff',
+    color: Colors.textPrimary,
   },
   userRankBanner: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginHorizontal: 16,
-    marginBottom: 12,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
     backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: Radius.md,
+    padding: Spacing.lg,
     borderLeftWidth: 4,
     borderLeftColor: Colors.primary,
   },
   userRankLabel: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: FontSize.md,
   },
   userRankValue: {
     color: Colors.primary,
@@ -268,36 +268,32 @@ const styles = StyleSheet.create({
   },
   list: {
     flex: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing.lg,
   },
   emptyState: {
     alignItems: 'center',
-    padding: 32,
+    padding: Spacing.xxxl,
     backgroundColor: Colors.surface,
-    borderRadius: 16,
-  },
-  emptyIcon: {
-    fontSize: 40,
-    marginBottom: 12,
+    borderRadius: Radius.lg,
   },
   emptyText: {
     color: Colors.textPrimary,
-    fontSize: 16,
+    fontSize: FontSize.lg,
     fontWeight: '600',
   },
   emptySubtext: {
     color: Colors.textSecondary,
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: FontSize.md,
+    marginTop: Spacing.xs,
   },
   entryCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     padding: 14,
-    marginBottom: 8,
-    gap: 12,
+    marginBottom: Spacing.sm,
+    gap: Spacing.md,
   },
   currentUserCard: {
     borderWidth: 1,
@@ -308,19 +304,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   rankText: {
-    fontSize: 16,
+    fontSize: FontSize.lg,
     fontWeight: '700',
   },
   avatar: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.xl,
     backgroundColor: Colors.surfaceHighlight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    fontSize: 16,
+    fontSize: FontSize.lg,
     fontWeight: '700',
     color: Colors.textPrimary,
   },
@@ -334,20 +330,20 @@ const styles = StyleSheet.create({
   },
   userStats: {
     color: Colors.textSecondary,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     marginTop: 2,
   },
   scoreText: {
     color: Colors.primary,
-    fontSize: 16,
+    fontSize: FontSize.lg,
     fontWeight: '700',
   },
   disclaimer: {
-    paddingVertical: 20,
+    paddingVertical: Spacing.xl,
     alignItems: 'center',
   },
   disclaimerText: {
     color: Colors.textMuted,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
 });

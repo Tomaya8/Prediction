@@ -12,7 +12,7 @@ type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 function HamburgerIcon({ onPress }: { onPress: () => void }) {
   return (
     <TouchableOpacity onPress={onPress} style={styles.hamburgerButton}>
-      <Ionicons name="menu-outline" size={26} color="#FFFFFF" />
+      <Ionicons name="menu-outline" size={26} color={Colors.headerText} />
     </TouchableOpacity>
   );
 }
@@ -35,7 +35,7 @@ function MenuItem({
         <Ionicons
           name={icon}
           size={20}
-          color={danger ? '#EF4444' : Colors.textSecondary}
+          color={danger ? Colors.danger : Colors.textSecondary}
         />
       </View>
       <Text style={[styles.menuTitle, danger && styles.menuTitleDanger]}>{title}</Text>
@@ -63,7 +63,7 @@ function TabIcon({
     <Ionicons
       name={focused ? active : inactive}
       size={22}
-      color={focused ? '#22C55E' : '#666666'}
+      color={focused ? Colors.tabActive : Colors.tabInactive}
     />
   );
 }
@@ -112,18 +112,18 @@ export default function TabLayout() {
       <Tabs
         screenOptions={{
           tabBarStyle: {
-            backgroundColor: '#1E1E2E',
-            borderTopColor: '#2D2D44',
+            backgroundColor: Colors.tabBar,
+            borderTopColor: Colors.tabBorder,
             borderTopWidth: 1,
             height: 70,
             paddingBottom: 10,
             paddingTop: 8,
           },
-          tabBarActiveTintColor: '#22C55E',
-          tabBarInactiveTintColor: '#666666',
+          tabBarActiveTintColor: Colors.tabActive,
+          tabBarInactiveTintColor: Colors.tabInactive,
           tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
-          headerStyle: { backgroundColor: '#1E1E2E' },
-          headerTintColor: '#FFFFFF',
+          headerStyle: { backgroundColor: Colors.headerBg },
+          headerTintColor: Colors.headerText,
           headerTitleStyle: { fontWeight: 'bold' },
           headerLeft: () => <HamburgerIcon onPress={() => setMenuVisible(true)} />,
         }}
@@ -191,7 +191,7 @@ export default function TabLayout() {
                   {user?.displayName ?? user?.email ?? 'User'}
                 </Text>
                 <View style={styles.balanceRow}>
-                  <Ionicons name="diamond-outline" size={13} color="#F59E0B" />
+                  <Ionicons name="diamond-outline" size={13} color={Colors.warning} />
                   <Text style={styles.balanceText}>
                     {user?.creditBalance?.toLocaleString() ?? '—'} credits
                   </Text>
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
   // Overlay + drawer
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: Colors.overlay,
   },
   drawer: {
     width: 290,
@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#fff',
+    color: Colors.textPrimary,
   },
   userInfo: { flex: 1 },
   userName: {
@@ -311,12 +311,12 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: Colors.surfaceHighlight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   menuIconWrapDanger: {
-    backgroundColor: 'rgba(239,68,68,0.12)',
+    backgroundColor: Colors.dangerMuted,
   },
   menuTitle: {
     flex: 1,
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   menuTitleDanger: {
-    color: '#EF4444',
+    color: Colors.danger,
   },
 
   // Footer

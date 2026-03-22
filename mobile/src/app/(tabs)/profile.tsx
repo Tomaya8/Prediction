@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Colors } from '../../lib/colors';
+import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
 import { apiClient } from '../../lib/api-client';
 import { signOut } from '../../lib/auth';
 
@@ -113,7 +113,7 @@ export default function ProfileScreen() {
           <Text style={styles.email}>{profile.email}</Text>
           {profile.isPremium && (
             <View style={styles.premiumBadge}>
-              <Ionicons name="star" size={14} color="#F59E0B" />
+              <Ionicons name="star" size={14} color={Colors.warning} />
               <Text style={styles.premiumText}>Premium</Text>
             </View>
           )}
@@ -176,7 +176,7 @@ export default function ProfileScreen() {
         <Text style={styles.sectionTitle}>Streaks</Text>
         <View style={styles.streakRow}>
           <View style={styles.streakCard}>
-            <Ionicons name="flame-outline" size={24} color="#F59E0B" />
+            <Ionicons name="flame-outline" size={24} color={Colors.warning} />
             <Text style={styles.streakValue}>{profile.currentStreak}</Text>
             <Text style={styles.streakLabel}>Current</Text>
           </View>
@@ -243,21 +243,21 @@ const styles = StyleSheet.create({
   errorText: {
     color: Colors.danger,
     fontSize: 15,
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   retryButton: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing.xxl,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: Radius.md,
   },
   retryText: {
-    color: '#fff',
+    color: Colors.textPrimary,
     fontWeight: '700',
   },
   header: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: Spacing.xxl,
   },
   avatar: {
     width: 80,
@@ -266,12 +266,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   avatarText: {
-    fontSize: 28,
+    fontSize: FontSize.title,
     fontWeight: '700',
-    color: '#fff',
+    color: Colors.textPrimary,
   },
   displayName: {
     color: Colors.textPrimary,
@@ -280,103 +280,103 @@ const styles = StyleSheet.create({
   },
   email: {
     color: Colors.textSecondary,
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: FontSize.md,
+    marginTop: Spacing.xs,
   },
   premiumBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(245,158,11,0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginTop: 8,
-    gap: 4,
+    backgroundColor: Colors.warningMuted,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.md,
+    marginTop: Spacing.sm,
+    gap: Spacing.xs,
   },
   premiumText: {
-    color: '#F59E0B',
-    fontSize: 13,
+    color: Colors.warning,
+    fontSize: FontSize.sm,
     fontWeight: '600',
   },
   balanceCard: {
     backgroundColor: Colors.surface,
-    margin: 16,
-    borderRadius: 16,
-    padding: 16,
+    margin: Spacing.lg,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
   },
   balanceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
   },
   balanceLabel: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: FontSize.md,
   },
   balanceValue: {
     color: Colors.primary,
-    fontSize: 28,
+    fontSize: FontSize.title,
     fontWeight: '700',
   },
   dailyReward: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.background,
-    borderRadius: 12,
-    padding: 12,
-    gap: 12,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    gap: Spacing.md,
   },
   dailyRewardContent: {
     flex: 1,
   },
   dailyRewardTitle: {
     color: Colors.textPrimary,
-    fontSize: 16,
+    fontSize: FontSize.lg,
     fontWeight: '600',
   },
   dailyRewardText: {
     color: Colors.textSecondary,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
   dailyRewardButton: {
     color: Colors.primary,
-    fontSize: 14,
+    fontSize: FontSize.md,
     fontWeight: '700',
   },
   sectionTitle: {
     color: Colors.textPrimary,
-    fontSize: 18,
+    fontSize: FontSize.xl,
     fontWeight: '700',
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 12,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 12,
+    paddingHorizontal: Spacing.md,
   },
   statCard: {
     width: '50%',
-    padding: 4,
+    padding: Spacing.xs,
   },
   statCardInner: {
     backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: Radius.md,
+    padding: Spacing.lg,
     alignItems: 'center',
   },
   statValue: {
     color: Colors.textPrimary,
-    fontSize: 20,
+    fontSize: Spacing.xl,
     fontWeight: '700',
   },
   statLabel: {
     color: Colors.textSecondary,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: Spacing.xs,
   },
   positive: {
     color: Colors.primary,
@@ -386,17 +386,17 @@ const styles = StyleSheet.create({
   },
   streakRow: {
     flexDirection: 'row',
-    paddingHorizontal: 12,
-    gap: 8,
+    paddingHorizontal: Spacing.md,
+    gap: Spacing.sm,
   },
   streakCard: {
     flex: 1,
     backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: Radius.md,
+    padding: Spacing.lg,
     alignItems: 'center',
-    margin: 4,
-    gap: 4,
+    margin: Spacing.xs,
+    gap: Spacing.xs,
   },
   streakValue: {
     color: Colors.textPrimary,
@@ -405,30 +405,30 @@ const styles = StyleSheet.create({
   },
   streakLabel: {
     color: Colors.textSecondary,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
   earningsCard: {
     backgroundColor: Colors.surface,
-    marginHorizontal: 16,
-    borderRadius: 16,
-    padding: 16,
+    marginHorizontal: Spacing.lg,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
   },
   earningsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   earningsLabel: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: FontSize.md,
   },
   earningsValue: {
-    fontSize: 14,
+    fontSize: FontSize.md,
     fontWeight: '600',
   },
   earningsTotal: {
-    marginTop: 4,
-    paddingTop: 8,
+    marginTop: Spacing.xs,
+    paddingTop: Spacing.sm,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
@@ -445,25 +445,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 16,
-    marginTop: 24,
-    marginBottom: 16,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.xxl,
+    marginBottom: Spacing.lg,
     paddingVertical: 14,
     backgroundColor: Colors.surface,
-    borderRadius: 12,
-    gap: 8,
+    borderRadius: Radius.md,
+    gap: Spacing.sm,
   },
   signOutText: {
     color: Colors.danger,
-    fontSize: 16,
+    fontSize: FontSize.lg,
     fontWeight: '600',
   },
   disclaimer: {
-    paddingVertical: 20,
+    paddingVertical: Spacing.xl,
     alignItems: 'center',
   },
   disclaimerText: {
     color: Colors.textMuted,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
 });

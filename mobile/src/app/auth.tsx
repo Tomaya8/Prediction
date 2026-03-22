@@ -78,7 +78,9 @@ export default function AuthScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Logo */}
         <View style={styles.logoContainer}>
-          <Text style={styles.logo}>🔮</Text>
+          <View style={styles.logoCircle}>
+            <Text style={styles.logoText}>PS</Text>
+          </View>
           <Text style={styles.appName}>PredictSpinz</Text>
           <Text style={styles.tagline}>Predict the future, win credits</Text>
         </View>
@@ -182,7 +184,7 @@ export default function AuthScreen() {
             style={styles.socialButton}
             onPress={() => Alert.alert('Coming Soon', 'Apple sign-in will be available in a future update.')}
           >
-            <Text style={styles.socialIcon}>🍎</Text>
+            <Text style={styles.socialIcon}>{'\uF8FF'}</Text>
             <Text style={styles.socialText}>Continue with Apple</Text>
           </TouchableOpacity>
 
@@ -190,7 +192,7 @@ export default function AuthScreen() {
             style={styles.socialButton}
             onPress={() => Alert.alert('Coming Soon', 'Google sign-in will be available in a future update.')}
           >
-            <Text style={styles.socialIcon}>🔵</Text>
+            <Text style={styles.socialIcon}>G</Text>
             <Text style={styles.socialText}>Continue with Google</Text>
           </TouchableOpacity>
 
@@ -233,9 +235,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 40,
   },
-  logo: {
-    fontSize: 64,
+  logoCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 16,
+  },
+  logoText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: Colors.textPrimary,
   },
   appName: {
     fontSize: 32,
@@ -332,6 +344,7 @@ const styles = StyleSheet.create({
   socialIcon: {
     fontSize: 24,
     marginRight: 12,
+    color: Colors.textPrimary,
   },
   socialText: {
     color: Colors.textPrimary,

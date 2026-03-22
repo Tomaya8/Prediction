@@ -4,7 +4,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   Share, RefreshControl, ActivityIndicator, Modal, TextInput,
 } from 'react-native';
-import { Colors } from '../../lib/colors';
+import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
 import { apiClient, type Market } from '../../lib/api-client';
 
 interface Friend {
@@ -165,7 +165,7 @@ function CreateChallengeModal({
                       ]}
                       onPress={() => setSelectedOutcome(o.id)}
                     >
-                      <View style={[modalStyles.outcomeDot, { backgroundColor: o.color || '#888' }]} />
+                      <View style={[modalStyles.outcomeDot, { backgroundColor: o.color || Colors.textMuted }]} />
                       <Text style={modalStyles.outcomeLabel}>{o.name}</Text>
                       {isSelected && <Text style={modalStyles.checkmark}>✓</Text>}
                     </TouchableOpacity>
@@ -222,7 +222,7 @@ function CreateChallengeModal({
                   disabled={!selectedOutcome || creating}
                 >
                   {creating
-                    ? <ActivityIndicator color="#fff" />
+                    ? <ActivityIndicator color={Colors.textPrimary} />
                     : <Text style={modalStyles.createBtnText}>Send Challenge</Text>}
                 </TouchableOpacity>
               </View>
@@ -584,50 +584,50 @@ export default function FriendsScreen() {
 // ─── Modal Styles ────────────────────────────────────────────────────────────
 
 const modalStyles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  container: { backgroundColor: Colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '85%', paddingBottom: 32 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 4 },
-  title: { fontSize: 20, fontWeight: '700', color: Colors.textPrimary },
-  closeBtn: { fontSize: 22, color: Colors.textSecondary, padding: 4 },
-  subtitle: { fontSize: 14, color: Colors.textSecondary, paddingHorizontal: 20, marginBottom: 12 },
-  scroll: { paddingHorizontal: 20 },
+  overlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
+  container: { backgroundColor: Colors.surface, borderTopLeftRadius: Spacing.xxl, borderTopRightRadius: Spacing.xxl, maxHeight: '85%', paddingBottom: Spacing.xxxl },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Spacing.xl, paddingBottom: Spacing.xs },
+  title: { fontSize: Spacing.xl, fontWeight: '700', color: Colors.textPrimary },
+  closeBtn: { fontSize: FontSize.xxl, color: Colors.textSecondary, padding: Spacing.xs },
+  subtitle: { fontSize: FontSize.md, color: Colors.textSecondary, paddingHorizontal: Spacing.xl, marginBottom: Spacing.md },
+  scroll: { paddingHorizontal: Spacing.xl },
   emptyText: { color: Colors.textSecondary, textAlign: 'center', marginTop: 40 },
 
-  marketCard: { backgroundColor: Colors.background, borderRadius: 12, padding: 14, marginBottom: 10 },
-  marketCategory: { fontSize: 11, color: Colors.textMuted, fontWeight: '600', marginBottom: 4 },
-  marketTitle: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary, marginBottom: 8 },
-  outcomesRow: { flexDirection: 'row', gap: 8 },
-  outcomeChip: { fontSize: 12, color: Colors.textSecondary, backgroundColor: Colors.surface, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  marketCard: { backgroundColor: Colors.background, borderRadius: Radius.md, padding: 14, marginBottom: 10 },
+  marketCategory: { fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: '600', marginBottom: Spacing.xs },
+  marketTitle: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary, marginBottom: Spacing.sm },
+  outcomesRow: { flexDirection: 'row', gap: Spacing.sm },
+  outcomeChip: { fontSize: 12, color: Colors.textSecondary, backgroundColor: Colors.surface, paddingHorizontal: Spacing.sm, paddingVertical: 3, borderRadius: 6 },
 
-  selectedMarketBanner: { backgroundColor: Colors.background, borderRadius: 12, padding: 14, marginBottom: 16 },
-  bannerLabel: { fontSize: 11, color: Colors.textMuted, marginBottom: 4 },
+  selectedMarketBanner: { backgroundColor: Colors.background, borderRadius: Radius.md, padding: 14, marginBottom: Spacing.lg },
+  bannerLabel: { fontSize: FontSize.xs, color: Colors.textMuted, marginBottom: Spacing.xs },
   bannerTitle: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
 
-  fieldLabel: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, marginBottom: 8, marginTop: 8 },
-  outcomePicker: { gap: 8, marginBottom: 16 },
-  outcomeButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, borderRadius: 12, padding: 14, borderWidth: 2, borderColor: 'transparent', gap: 10 },
-  outcomeDot: { width: 12, height: 12, borderRadius: 6 },
-  outcomeLabel: { fontSize: 16, fontWeight: '600', color: Colors.textPrimary, flex: 1 },
-  checkmark: { fontSize: 18, color: Colors.primary, fontWeight: '700' },
+  fieldLabel: { fontSize: FontSize.md, fontWeight: '600', color: Colors.textPrimary, marginBottom: Spacing.sm, marginTop: Spacing.sm },
+  outcomePicker: { gap: Spacing.sm, marginBottom: Spacing.lg },
+  outcomeButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, borderRadius: Radius.md, padding: 14, borderWidth: 2, borderColor: 'transparent', gap: 10 },
+  outcomeDot: { width: Spacing.md, height: Spacing.md, borderRadius: 6 },
+  outcomeLabel: { fontSize: FontSize.lg, fontWeight: '600', color: Colors.textPrimary, flex: 1 },
+  checkmark: { fontSize: FontSize.xl, color: Colors.primary, fontWeight: '700' },
 
-  amountInput: { backgroundColor: Colors.background, borderRadius: 12, padding: 16, fontSize: 20, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center' },
-  quickAmounts: { flexDirection: 'row', gap: 8, marginTop: 10, marginBottom: 16 },
-  quickBtn: { flex: 1, backgroundColor: Colors.background, borderRadius: 8, paddingVertical: 10, alignItems: 'center' },
+  amountInput: { backgroundColor: Colors.background, borderRadius: Radius.md, padding: Spacing.lg, fontSize: Spacing.xl, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center' },
+  quickAmounts: { flexDirection: 'row', gap: Spacing.sm, marginTop: 10, marginBottom: Spacing.lg },
+  quickBtn: { flex: 1, backgroundColor: Colors.background, borderRadius: Radius.sm, paddingVertical: 10, alignItems: 'center' },
   quickBtnActive: { backgroundColor: Colors.primary },
   quickBtnText: { color: Colors.textSecondary, fontWeight: '600' },
-  quickBtnTextActive: { color: '#fff' },
+  quickBtnTextActive: { color: Colors.textPrimary },
 
-  summary: { backgroundColor: Colors.background, borderRadius: 12, padding: 14, marginBottom: 16 },
+  summary: { backgroundColor: Colors.background, borderRadius: Radius.md, padding: 14, marginBottom: Spacing.lg },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  summaryLabel: { color: Colors.textSecondary, fontSize: 14 },
-  summaryValue: { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  summaryLabel: { color: Colors.textSecondary, fontSize: FontSize.md },
+  summaryValue: { color: Colors.textPrimary, fontSize: FontSize.md, fontWeight: '600' },
 
   actions: { flexDirection: 'row', gap: 10 },
-  backBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: Colors.background },
-  backBtnText: { color: Colors.textSecondary, fontWeight: '600', fontSize: 16 },
-  createBtn: { flex: 2, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: Colors.primary },
+  backBtn: { flex: 1, paddingVertical: 14, borderRadius: Radius.md, alignItems: 'center', backgroundColor: Colors.background },
+  backBtnText: { color: Colors.textSecondary, fontWeight: '600', fontSize: FontSize.lg },
+  createBtn: { flex: 2, paddingVertical: 14, borderRadius: Radius.md, alignItems: 'center', backgroundColor: Colors.primary },
   createBtnDisabled: { opacity: 0.5 },
-  createBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  createBtnText: { color: Colors.textPrimary, fontWeight: '700', fontSize: FontSize.lg },
 });
 
 // ─── Main Styles ─────────────────────────────────────────────────────────────
@@ -635,64 +635,64 @@ const modalStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   centered: { justifyContent: 'center', alignItems: 'center' },
-  tabContainer: { flexDirection: 'row', padding: 16, gap: 8 },
-  tab: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12, backgroundColor: Colors.surface },
+  tabContainer: { flexDirection: 'row', padding: Spacing.lg, gap: Spacing.sm },
+  tab: { flex: 1, paddingVertical: Spacing.md, alignItems: 'center', borderRadius: Radius.md, backgroundColor: Colors.surface },
   tabActive: { backgroundColor: Colors.primary },
-  tabText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
+  tabText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textSecondary },
   tabTextActive: { color: Colors.textPrimary },
-  content: { flex: 1, paddingHorizontal: 16 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: 12, marginTop: 8 },
+  content: { flex: 1, paddingHorizontal: Spacing.lg },
+  sectionTitle: { fontSize: FontSize.xl, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: Spacing.md, marginTop: Spacing.sm },
 
   // Friends
-  friendCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, padding: 16, borderRadius: 12, marginBottom: 8 },
+  friendCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: Radius.md, marginBottom: Spacing.sm },
   friendLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  avatarContainer: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  avatar: { fontSize: 18, color: '#fff', fontWeight: 'bold' },
+  avatarContainer: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: Spacing.md },
+  avatar: { fontSize: FontSize.xl, color: Colors.textPrimary, fontWeight: 'bold' },
   friendInfo: { flex: 1 },
-  friendName: { fontSize: 16, fontWeight: '600', color: Colors.textPrimary },
-  friendStats: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
-  challengeButton: { backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  challengeButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  friendName: { fontSize: FontSize.lg, fontWeight: '600', color: Colors.textPrimary },
+  friendStats: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
+  challengeButton: { backgroundColor: Colors.primary, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: Radius.sm },
+  challengeButtonText: { color: Colors.textPrimary, fontWeight: '600', fontSize: FontSize.md },
 
   // Challenges
-  challengeCard: { backgroundColor: Colors.surface, padding: 16, borderRadius: 12, marginBottom: 12 },
+  challengeCard: { backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: Radius.md, marginBottom: Spacing.md },
   activeChallengeCard: { borderWidth: 1, borderColor: Colors.primary },
-  challengeHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  challengeFriend: { fontSize: 16, fontWeight: '600', color: Colors.textPrimary },
-  challengeAmount: { fontSize: 16, fontWeight: 'bold', color: Colors.warning },
-  predictionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', marginBottom: 12 },
+  challengeHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing.sm },
+  challengeFriend: { fontSize: FontSize.lg, fontWeight: '600', color: Colors.textPrimary },
+  challengeAmount: { fontSize: FontSize.lg, fontWeight: 'bold', color: Colors.warning },
+  predictionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', marginBottom: Spacing.md },
   prediction: { alignItems: 'center' },
   predictionLabel: { fontSize: 12, color: Colors.textMuted },
-  predictionValue: { fontSize: 18, fontWeight: 'bold', marginTop: 4 },
-  vsText: { fontSize: 14, color: Colors.textMuted },
-  challengeActions: { flexDirection: 'row', gap: 8 },
-  actionButton: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
+  predictionValue: { fontSize: FontSize.xl, fontWeight: 'bold', marginTop: Spacing.xs },
+  vsText: { fontSize: FontSize.md, color: Colors.textMuted },
+  challengeActions: { flexDirection: 'row', gap: Spacing.sm },
+  actionButton: { flex: 1, paddingVertical: Spacing.md, borderRadius: Radius.sm, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
   declineButton: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.danger },
   declineButtonText: { color: Colors.danger, fontWeight: '600' },
   acceptButton: { backgroundColor: Colors.primary },
-  acceptButtonText: { color: '#fff', fontWeight: '600' },
-  statusBadge: { backgroundColor: Colors.background, padding: 8, borderRadius: 8, alignItems: 'center' },
-  statusText: { fontSize: 13, color: Colors.textSecondary },
-  completedPot: { fontSize: 13, color: Colors.textSecondary },
+  acceptButtonText: { color: Colors.textPrimary, fontWeight: '600' },
+  statusBadge: { backgroundColor: Colors.background, padding: Spacing.sm, borderRadius: Radius.sm, alignItems: 'center' },
+  statusText: { fontSize: FontSize.sm, color: Colors.textSecondary },
+  completedPot: { fontSize: FontSize.sm, color: Colors.textSecondary },
 
   // Empty
   emptyState: { alignItems: 'center', padding: 40 },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: 8 },
-  emptyText: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center' },
+  emptyIcon: { fontSize: 48, marginBottom: Spacing.md },
+  emptyTitle: { fontSize: FontSize.xl, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: Spacing.sm },
+  emptyText: { fontSize: FontSize.md, color: Colors.textSecondary, textAlign: 'center' },
 
   // Referral
-  referralCard: { backgroundColor: Colors.surface, padding: 20, borderRadius: 16, marginBottom: 16 },
-  referralTitle: { fontSize: 22, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: 8, textAlign: 'center' },
-  referralDescription: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', marginBottom: 20 },
-  codeContainer: { backgroundColor: Colors.background, padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 16 },
-  codeLabel: { fontSize: 12, color: Colors.textMuted, marginBottom: 4 },
+  referralCard: { backgroundColor: Colors.surface, padding: Spacing.xl, borderRadius: Radius.lg, marginBottom: Spacing.lg },
+  referralTitle: { fontSize: FontSize.xxl, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: Spacing.sm, textAlign: 'center' },
+  referralDescription: { fontSize: FontSize.md, color: Colors.textSecondary, textAlign: 'center', marginBottom: Spacing.xl },
+  codeContainer: { backgroundColor: Colors.background, padding: Spacing.lg, borderRadius: Radius.md, alignItems: 'center', marginBottom: Spacing.lg },
+  codeLabel: { fontSize: 12, color: Colors.textMuted, marginBottom: Spacing.xs },
   code: { fontSize: 28, fontWeight: 'bold', color: Colors.primary, letterSpacing: 2 },
   shareButton: { backgroundColor: Colors.primary, paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
-  shareButtonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  rewardsCard: { backgroundColor: Colors.surface, padding: 16, borderRadius: 12 },
-  rewardsTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: 16 },
-  rewardRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  rewardLabel: { fontSize: 14, color: Colors.textSecondary },
-  rewardValue: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary },
+  shareButtonText: { color: Colors.textPrimary, fontWeight: '600', fontSize: FontSize.lg },
+  rewardsCard: { backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: Radius.md },
+  rewardsTitle: { fontSize: FontSize.lg, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: Spacing.lg },
+  rewardRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  rewardLabel: { fontSize: FontSize.md, color: Colors.textSecondary },
+  rewardValue: { fontSize: FontSize.md, fontWeight: '600', color: Colors.textPrimary },
 });

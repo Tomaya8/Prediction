@@ -3,7 +3,8 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, RefreshControl,
 } from 'react-native';
-import { Colors } from '../../lib/colors';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
 import { apiClient } from '../../lib/api-client';
 import { getStoredUser } from '../../lib/auth';
 
@@ -125,7 +126,7 @@ export default function PortfolioScreen() {
         <Text style={styles.sectionTitle}>Active Positions</Text>
         {activeHoldings.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>📊</Text>
+            <Ionicons name="bar-chart-outline" size={40} color={Colors.textMuted} style={{ marginBottom: Spacing.md }} />
             <Text style={styles.emptyText}>No active positions</Text>
             <Text style={styles.emptySubtext}>Start trading to build your portfolio</Text>
           </View>
@@ -177,7 +178,11 @@ export default function PortfolioScreen() {
                   <Text style={styles.holdingMarket} numberOfLines={2}>{item.marketTitle}</Text>
                   <View style={[styles.resultBadge, item.isWinner ? styles.wonBadge : styles.lostBadge]}>
                     <Text style={styles.resultText}>
-                      {item.isWinner ? '✅ Won' : '❌ Lost'}
+                      {item.isWinner ? (
+                        <><Ionicons name="checkmark-circle" size={12} color={Colors.primary} /> Won</>
+                      ) : (
+                        <><Ionicons name="close-circle" size={12} color={Colors.danger} /> Lost</>
+                      )}
                     </Text>
                   </View>
                 </View>
@@ -221,24 +226,24 @@ const styles = StyleSheet.create({
   errorText: {
     color: Colors.danger,
     fontSize: 15,
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   retryButton: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing.xxl,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: Radius.md,
   },
   retryText: {
-    color: '#fff',
+    color: Colors.textPrimary,
     fontWeight: '700',
   },
   statsContainer: {
     flexDirection: 'row',
     backgroundColor: Colors.surface,
-    margin: 16,
-    borderRadius: 16,
-    padding: 16,
+    margin: Spacing.lg,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
   },
   statItem: {
     flex: 1,
@@ -250,8 +255,8 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     color: Colors.textSecondary,
-    fontSize: 12,
-    marginBottom: 4,
+    fontSize: FontSize.xs,
+    marginBottom: Spacing.xs,
   },
   statValue: {
     color: Colors.textPrimary,
@@ -260,7 +265,7 @@ const styles = StyleSheet.create({
   },
   statCurrency: {
     color: Colors.textSecondary,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
   positive: {
     color: Colors.primary,
@@ -270,47 +275,43 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing.lg,
   },
   sectionTitle: {
     color: Colors.textPrimary,
-    fontSize: 18,
+    fontSize: FontSize.xl,
     fontWeight: '700',
-    marginBottom: 12,
-    marginTop: 8,
+    marginBottom: Spacing.md,
+    marginTop: Spacing.sm,
   },
   emptyState: {
     alignItems: 'center',
-    padding: 32,
+    padding: Spacing.xxxl,
     backgroundColor: Colors.surface,
-    borderRadius: 16,
-  },
-  emptyIcon: {
-    fontSize: 40,
-    marginBottom: 12,
+    borderRadius: Radius.lg,
   },
   emptyText: {
     color: Colors.textPrimary,
-    fontSize: 16,
+    fontSize: FontSize.lg,
     fontWeight: '600',
   },
   emptySubtext: {
     color: Colors.textSecondary,
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: FontSize.md,
+    marginTop: Spacing.xs,
   },
   holdingCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   holdingHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
-    gap: 8,
+    marginBottom: Spacing.md,
+    gap: Spacing.sm,
   },
   holdingMarket: {
     color: Colors.textPrimary,
@@ -323,22 +324,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: Colors.background,
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.md,
   },
   outcomeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: Spacing.sm,
+    height: Spacing.sm,
+    borderRadius: Spacing.xs,
     marginRight: 6,
   },
   outcomeText: {
     color: Colors.textPrimary,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     fontWeight: '500',
   },
   holdingDetails: {
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   holdingRow: {
     flexDirection: 'row',
@@ -353,32 +354,32 @@ const styles = StyleSheet.create({
   },
   holdingLabel: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: FontSize.md,
   },
   holdingValue: {
     color: Colors.textPrimary,
-    fontSize: 14,
+    fontSize: FontSize.md,
     fontWeight: '500',
   },
   resolvedCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   resultBadge: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.md,
   },
   wonBadge: {
-    backgroundColor: Colors.primary + '20',
+    backgroundColor: Colors.primaryMuted,
   },
   lostBadge: {
-    backgroundColor: Colors.danger + '20',
+    backgroundColor: Colors.dangerMuted,
   },
   resultText: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     fontWeight: '600',
   },
   resolvedDetails: {
@@ -388,19 +389,19 @@ const styles = StyleSheet.create({
   },
   resolvedText: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: FontSize.md,
   },
   winningsText: {
     color: Colors.primary,
-    fontSize: 14,
+    fontSize: FontSize.md,
     fontWeight: '700',
   },
   disclaimer: {
-    paddingVertical: 20,
+    paddingVertical: Spacing.xl,
     alignItems: 'center',
   },
   disclaimerText: {
     color: Colors.textMuted,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
 });

@@ -68,13 +68,13 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="light" />
+      <StatusBar style={Colors.statusBarStyle} />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: '#1E1E2E' },
-          headerTintColor: '#FFFFFF',
+          headerStyle: { backgroundColor: Colors.headerBg },
+          headerTintColor: Colors.headerText,
           headerTitleStyle: { fontWeight: 'bold' },
-          contentStyle: { backgroundColor: '#1E1E2E' },
+          contentStyle: { backgroundColor: Colors.background },
         }}
       >
         <Stack.Screen name="auth" options={{ headerShown: false }} />
