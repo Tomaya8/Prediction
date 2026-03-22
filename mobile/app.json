@@ -11,7 +11,7 @@
     "splash": {
       "image": "./splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F0EDE8"
+      "backgroundColor": "#F5F5F7"
     },
     "ios": {
       "supportsTablet": true,
@@ -24,7 +24,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./icon.png",
-        "backgroundColor": "#F0EDE8"
+        "backgroundColor": "#F5F5F7"
       },
       "package": "com.predictspinz.app",
       "permissions": [
@@ -41,7 +41,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#F0EDE8",
+          "backgroundColor": "#F5F5F7",
           "image": "./splash.png",
           "imageWidth": 200
         }

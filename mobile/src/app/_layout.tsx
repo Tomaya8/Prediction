@@ -61,8 +61,8 @@ export default function RootLayout() {
 
   if (!authReady) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#F0EDE8', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#1A1A2E" />
+      <View style={{ flex: 1, backgroundColor: '#F5F5F7', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#16A34A" />
       </View>
     );
   }
