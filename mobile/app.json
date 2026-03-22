@@ -5,13 +5,13 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "scheme": "predictspinz",
     "splash": {
       "image": "./splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1E1E2E"
+      "backgroundColor": "#F0EDE8"
     },
     "ios": {
       "supportsTablet": true,
@@ -24,7 +24,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./icon.png",
-        "backgroundColor": "#1E1E2E"
+        "backgroundColor": "#F0EDE8"
       },
       "package": "com.predictspinz.app",
       "permissions": [
@@ -41,7 +41,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#1E1E2E",
+          "backgroundColor": "#F0EDE8",
           "image": "./splash.png",
           "imageWidth": 200
         }
