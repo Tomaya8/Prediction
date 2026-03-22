@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
+import { Colors, Spacing, Radius, FontSize, setThemeMode, getThemeMode } from '../../lib/colors';
 import { signOut } from '../../lib/auth';
 import { apiClient } from '../../lib/api-client';
 
@@ -21,7 +21,16 @@ export default function SettingsScreen() {
   const [notifications, setNotifications] = React.useState(true);
   const [soundEffects, setSoundEffects] = React.useState(true);
   const [hapticFeedback, setHapticFeedback] = React.useState(true);
-  const [darkMode, setDarkMode] = React.useState(true);
+  const [darkMode, setDarkMode] = React.useState(getThemeMode() === 'dark');
+
+  const handleDarkModeToggle = (value: boolean) => {
+    setDarkMode(value);
+    setThemeMode(value ? 'dark' : 'light');
+    Alert.alert(
+      'Theme Changed',
+      `${value ? 'Dark' : 'Light'} mode will fully apply on next app restart.`,
+    );
+  };
 
   const handleSignOut = () => {
     Alert.alert(
@@ -90,7 +99,7 @@ export default function SettingsScreen() {
       subtitle: 'Use dark theme',
       type: 'toggle',
       value: darkMode,
-      onToggle: setDarkMode,
+      onToggle: handleDarkModeToggle,
     },
   ];
 

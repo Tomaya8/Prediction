@@ -89,6 +89,24 @@ function ProposeForm({ onSuccess }: { onSuccess: () => void }) {
       return;
     }
 
+    // Parse date — support multiple formats
+    let parsedDate = new Date(expiresAt);
+    if (isNaN(parsedDate.getTime())) {
+      // Try parsing "Month Day Year" manually
+      const match = expiresAt.match(/(\w+)\s+(\d+),?\s*(\d{4})/);
+      if (match) {
+        parsedDate = new Date(`${match[1]} ${match[2]}, ${match[3]}`);
+      }
+    }
+    if (isNaN(parsedDate.getTime())) {
+      Alert.alert('Error', 'Could not parse date. Try format: 2026-12-31 or Dec 31, 2026');
+      return;
+    }
+    if (parsedDate <= new Date()) {
+      Alert.alert('Error', 'Resolution date must be in the future');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const res = await apiClient.submitProposal({
@@ -96,7 +114,7 @@ function ProposeForm({ onSuccess }: { onSuccess: () => void }) {
         description: description.trim() || undefined,
         category,
         outcomes,
-        suggestedExpiry: new Date(expiresAt).toISOString(),
+        suggestedExpiry: parsedDate.toISOString(),
         resolutionCriteria: resolutionCriteria.trim() || undefined,
       });
 
