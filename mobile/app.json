@@ -8,7 +8,7 @@
     "icon": "./icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "scheme": "predictspinz",
+    "scheme": "predich",
     "splash": {
       "image": "./splash.png",
       "resizeMode": "contain",
@@ -16,7 +16,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.predictspinz.app",
+      "bundleIdentifier": "com.predich.app",
       "infoPlist": {
         "NSPredictionMarketUsageDescription": "Predich allows you to trade virtual credits on real-world events.",
         "ITSAppUsesNonExemptEncryption": false
@@ -28,7 +28,7 @@
         "foregroundImage": "./icon.png",
         "backgroundColor": "#F5F5F7"
       },
-      "package": "com.predictspinz.app",
+      "package": "com.predich.app",
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE"
