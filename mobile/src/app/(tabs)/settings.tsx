@@ -129,14 +129,14 @@ export default function SettingsScreen() {
       title: 'Help Center',
       subtitle: 'FAQs and support',
       type: 'navigation',
-      onPress: () => Alert.alert('Help', 'For support, email support@predictspinz.com'),
+      onPress: () => Alert.alert('Help', 'For support, email support@predich.app'),
     },
     {
       icon: 'chatbubble-outline',
       title: 'Contact Us',
       subtitle: 'Get help from our team',
       type: 'navigation',
-      onPress: () => Linking.openURL('mailto:support@predictspinz.com'),
+      onPress: () => Linking.openURL('mailto:support@predich.app'),
     },
     {
       icon: 'document-text-outline',
@@ -196,7 +196,7 @@ export default function SettingsScreen() {
       <ScrollView style={styles.content}>
         {/* App Info */}
         <View style={styles.appInfo}>
-          <Text style={styles.appName}>PredictSpinz</Text>
+          <Text style={styles.appName}>Predich</Text>
           <Text style={styles.appVersion}>Version 1.0.0</Text>
           <Text style={styles.appTagline}>Predict. Win. Repeat.</Text>
         </View>
@@ -236,7 +236,7 @@ export default function SettingsScreen() {
           <Text style={styles.footerText}>
             Credits have no real-world value.{'\n'}
             This is a prediction game, not gambling.{'\n'}
-            © 2024 PredictSpinz
+            © 2024 Predich
           </Text>
         </View>
       </ScrollView>

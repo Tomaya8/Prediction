@@ -307,7 +307,7 @@ export default function FriendsScreen() {
     const code = referral?.referralCode || '';
     try {
       await Share.share({
-        message: `Join PredictSpinz and predict with me! Use my referral code: ${code} to get 500 free credits!\n\nDownload: https://predictspinz.app`,
+        message: `Join Predich and predict with me! Use my referral code: ${code} to get 500 free credits!\n\nDownload: https://predich.app`,
       });
     } catch (error) {
       console.error('Error sharing:', error);

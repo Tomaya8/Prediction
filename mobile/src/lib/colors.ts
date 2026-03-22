@@ -1,5 +1,5 @@
 /**
- * PredictSpinz Theme System
+ * Predich Theme System
  * Supports light + dark mode with consistent design tokens.
  */
 

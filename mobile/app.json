@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "PredictSpinz",
+    "name": "Predich",
     "slug": "predictspinz",
+    "owner": "tomaya",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./icon.png",
@@ -17,9 +18,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.predictspinz.app",
       "infoPlist": {
-        "NSPredictionMarketUsageDescription": "PredictSpinz allows you to trade virtual credits on real-world events.",
+        "NSPredictionMarketUsageDescription": "Predich allows you to trade virtual credits on real-world events.",
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "buildNumber": "3"
     },
     "android": {
       "adaptiveIcon": {
@@ -53,7 +55,10 @@
     },
     "extra": {
       "eas": {
-        "projectId": "predictspinz-app"
+        "projectId": "aaeb5b23-afa5-4df8-b082-5ab05b0074d3"
+      },
+      "router": {
+        "origin": false
       }
     }
   }

@@ -84,7 +84,7 @@ export const NewsLinks: React.FC<NewsLinksProps> = ({
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>Powered by PredictSpinz News</Text>
+        <Text style={styles.subtitle}>Powered by Predich News</Text>
       </View>
       
       <FlatList

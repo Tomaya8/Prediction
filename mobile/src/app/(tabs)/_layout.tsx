@@ -133,7 +133,7 @@ export default function TabLayout() {
           name="index"
           options={{
             title: 'Markets',
-            headerTitle: 'PredictSpinz',
+            headerTitle: 'Predich',
             tabBarIcon: ({ focused }) => <TabIcon name="index" focused={focused} />,
           }}
         />

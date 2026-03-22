@@ -1,5 +1,5 @@
 /**
- * Auth service for PredictSpinz Mobile.
+ * Auth service for Predich Mobile.
  * Calls our backend's /api/auth endpoints directly.
  * No Firebase SDK dependency needed — tokens are JWTs stored in SecureStore.
  */

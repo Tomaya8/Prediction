@@ -81,7 +81,7 @@ export default function AuthScreen() {
           <View style={styles.logoCircle}>
             <Text style={styles.logoText}>PS</Text>
           </View>
-          <Text style={styles.appName}>PredictSpinz</Text>
+          <Text style={styles.appName}>Predich</Text>
           <Text style={styles.tagline}>Predict the future, win credits</Text>
         </View>
 
@@ -165,7 +165,7 @@ export default function AuthScreen() {
               style={styles.forgotPassword}
               onPress={() => Alert.alert(
                 'Reset Password',
-                'Enter your email address above, then contact support@predictspinz.com to reset your password.',
+                'Enter your email address above, then contact support@predich.app to reset your password.',
               )}
             >
               <Text style={styles.forgotPasswordText}>Forgot password?</Text>

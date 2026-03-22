@@ -1,4 +1,4 @@
-// Firebase configuration for PredictSpinz
+// Firebase configuration for Predich
 // Replace values with your actual Firebase project credentials
 
 import { initializeApp, getApps } from 'firebase/app';

@@ -107,7 +107,7 @@ app.use((_req, res) => {
 // ——— Start ———
 const PORT = parseInt(process.env.PORT || '3001', 10);
 httpServer.listen(PORT, () => {
-  console.log(`PredictSpinz backend running on port ${PORT}`);
+  console.log(`Predich backend running on port ${PORT}`);
 });
 
 export default app;

@@ -1,4 +1,4 @@
-# PredictSpinz
+# Predich
 
 A Polymarket-inspired virtual credit prediction market app. Trade on real-world events with virtual credits — no real money, no risk.
 
@@ -42,7 +42,7 @@ A Polymarket-inspired virtual credit prediction market app. Trade on real-world 
 ## Project Structure
 
 ```
-PredictSpinz/
+Predich/
 ├── mobile/                    # React Native (Expo) mobile app
 │   ├── src/
 │   │   ├── app/              # Screens (Expo Router file-based routing)

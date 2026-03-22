@@ -175,7 +175,7 @@ async function getOrCreateBotUser(): Promise<string> {
     user = await prisma.user.create({
       data: {
         email: BOT_EMAIL,
-        displayName: 'PredictSpinz Team',
+        displayName: 'Predich Team',
         firebaseUid: `system_bot_${Date.now()}`,
         creditBalance: 0,
         isAdmin: false,

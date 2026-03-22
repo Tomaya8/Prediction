@@ -1,4 +1,4 @@
-// API Client for PredictSpinz Mobile App
+// API Client for Predich Mobile App
 // Connects to backend for trading, markets, and portfolio
 // Use environment variable or default to localhost for development
 
