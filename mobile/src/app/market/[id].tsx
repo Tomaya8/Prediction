@@ -265,6 +265,11 @@ export default function MarketDetailScreen() {
           </View>
           <Text style={styles.title}>{market.title}</Text>
           <Text style={styles.description}>{market.description}</Text>
+          {(market as any).createdBy?.displayName && (
+            <Text style={styles.proposedBy}>
+              Proposed by {(market as any).createdBy.displayName}
+            </Text>
+          )}
         </View>
 
         {/* Price History Chart */}
@@ -794,5 +799,10 @@ const styles = StyleSheet.create({
     fontSize: 28,
     color: Colors.primary,
     fontWeight: '600',
+  },
+  proposedBy: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    marginTop: 8,
   },
 });

@@ -157,4 +157,16 @@ router.post('/users/:id/ban', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/admin/sync-markets — trigger market sync from external sources
+router.post('/sync-markets', async (_req: Request, res: Response) => {
+  try {
+    const { syncMarkets } = require('../scripts/sync-markets');
+    const result = await syncMarkets();
+    return res.json({ success: true, data: result });
+  } catch (err) {
+    console.error('POST /admin/sync-markets error:', err);
+    return res.status(500).json({ success: false, error: 'Failed to sync markets' });
+  }
+});
+
 export default router;

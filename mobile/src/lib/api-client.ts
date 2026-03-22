@@ -324,6 +324,34 @@ class ApiClient {
     return this.request('/users/me/daily-reward', { method: 'POST' });
   }
 
+  // ============ PROPOSALS ============
+
+  async submitProposal(params: {
+    title: string;
+    description?: string;
+    category: string;
+    outcomes?: string[];
+    suggestedExpiry: string;
+    resolutionCriteria?: string;
+    sourceUrl?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.request('/proposals', { method: 'POST', body: JSON.stringify(params) });
+  }
+
+  async getProposals(status = 'PENDING', sort = 'upvotes'): Promise<ApiResponse<any[]>> {
+    return this.request(`/proposals?status=${status}&sort=${sort}`);
+  }
+
+  async getMyProposals(): Promise<ApiResponse<any[]>> {
+    return this.request('/proposals/mine');
+  }
+
+  async voteProposal(proposalId: string): Promise<ApiResponse<any>> {
+    return this.request(`/proposals/${proposalId}/vote`, { method: 'POST' });
+  }
+
+  // ============ TRANSACTIONS ============
+
   async getTransactions(type?: string): Promise<ApiResponse<any[]>> {
     const q = type ? `?type=${type}` : '';
     return this.request(`/users/me/transactions${q}`);

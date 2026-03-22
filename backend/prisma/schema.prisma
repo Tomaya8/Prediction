@@ -67,6 +67,9 @@ model User {
   tournaments       TournamentParticipant[]
   challengesCreated FriendChallenge[] @relation("challenger")
   challengesReceived FriendChallenge[] @relation("challenged")
+  createdMarkets    Market[]           @relation("createdMarkets")
+  proposals         MarketProposal[]
+  proposalVotes     ProposalVote[]
 
   @@index([email])
   @@index([firebaseUid])
@@ -146,11 +149,15 @@ model Market {
   totalVolume    Int       @default(0) // Total trading volume
   uniqueTraders  Int       @default(0)
 
+  // Creator (set when market was created from a proposal)
+  createdById    String?
+
   // Relations
   outcomes       Outcome[]
   trades         Trade[]
   comments       Comment[]
   holdings       Holding[]
+  createdBy      User?       @relation("createdMarkets", fields: [createdById], references: [id])
 
   @@index([category])
   @@index([status])
@@ -490,4 +497,54 @@ enum ChallengeStatus {
   ACCEPTED
   DECLINED
   COMPLETED
+}
+
+// ============================================
+// MARKET PROPOSALS
+// ============================================
+
+model MarketProposal {
+  id              String         @id @default(cuid())
+  title           String
+  description     String?
+  category        MarketCategory
+  resolutionCriteria String?     // Clear rules for how market resolves
+  sourceUrl       String?        // Source of truth URL
+  suggestedExpiry DateTime
+  outcomes        String[]       // Outcome names, e.g. ["Yes", "No"] or ["Trump", "DeSantis", "Other"]
+
+  status          ProposalStatus @default(PENDING)
+  adminNotes      String?        // Reason for rejection or notes on approval
+  createdById     String
+  marketId        String?        // Set when approved and market is created
+
+  upvotes         Int            @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  createdBy       User           @relation(fields: [createdById], references: [id])
+  votes           ProposalVote[]
+
+  @@index([status])
+  @@index([createdById])
+  @@index([upvotes])
+}
+
+model ProposalVote {
+  id          String   @id @default(cuid())
+  proposalId  String
+  userId      String
+  createdAt   DateTime @default(now())
+
+  proposal    MarketProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  user        User           @relation(fields: [userId], references: [id])
+
+  @@unique([proposalId, userId])
+  @@index([proposalId])
+}
+
+enum ProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }

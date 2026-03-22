@@ -292,6 +292,32 @@ class ApiClient {
       method: 'POST',
     });
   }
+
+  // ============================================
+  // PROPOSALS
+  // ============================================
+
+  async getProposals(status = 'PENDING', sort = 'upvotes'): Promise<ApiResponse<any>> {
+    return this.request(`/proposals?status=${status}&sort=${sort}&limit=50`);
+  }
+
+  async approveProposal(id: string, adminNotes?: string): Promise<ApiResponse<any>> {
+    return this.request(`/proposals/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ adminNotes }),
+    });
+  }
+
+  async syncMarkets(): Promise<ApiResponse<any>> {
+    return this.request('/admin/sync-markets', { method: 'POST' });
+  }
+
+  async rejectProposal(id: string, adminNotes?: string): Promise<ApiResponse<any>> {
+    return this.request(`/proposals/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ adminNotes: adminNotes || 'Does not meet market criteria' }),
+    });
+  }
 }
 
 // Export singleton instance

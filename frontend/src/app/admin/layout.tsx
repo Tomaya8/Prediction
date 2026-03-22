@@ -1,11 +1,12 @@
 import React from 'react';
 import Link from 'next/link';
-import { LayoutDashboard, Users, TrendingUp, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, TrendingUp, Lightbulb, LogOut } from 'lucide-react';
 
 const navItems = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/markets', label: 'Markets', icon: TrendingUp },
+  { href: '/admin/proposals', label: 'Proposals', icon: Lightbulb },
 ];
 
 export default function AdminLayout({

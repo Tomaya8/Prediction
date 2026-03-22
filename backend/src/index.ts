@@ -15,6 +15,7 @@ import leaderboardRouter from './routes/leaderboard';
 import tournamentsRouter from './routes/tournaments';
 import socialRouter from './routes/social';
 import adminRouter from './routes/admin';
+import proposalsRouter from './routes/proposals';
 
 const app = express();
 const httpServer = createServer(app);
@@ -91,6 +92,7 @@ app.use('/api/leaderboard', leaderboardRouter);
 app.use('/api/tournaments', tournamentsRouter);
 app.use('/api/social', socialRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/proposals', proposalsRouter);
 
 // Health check
 app.get('/health', (_req, res) => {

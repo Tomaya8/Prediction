@@ -179,6 +179,9 @@ router.get('/:id', async (req: Request, res: Response) => {
             isWinner: true
           }
         },
+        createdBy: {
+          select: { id: true, displayName: true, avatarUrl: true }
+        },
         _count: {
           select: {
             trades: true,
