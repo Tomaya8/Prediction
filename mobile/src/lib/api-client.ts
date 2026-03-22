@@ -2,7 +2,7 @@
 // Connects to backend for trading, markets, and portfolio
 // Use environment variable or default to localhost for development
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://us-central1-prediction-app-2026.cloudfunctions.net/api';
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 

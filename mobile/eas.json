@@ -15,6 +15,9 @@
       "distribution": "internal"
     },
     "production": {
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://us-central1-prediction-app-2026.cloudfunctions.net/api"
+      },
       "ios": {
         "distribution": "store",
         "autoIncrement": true

@@ -21,7 +21,7 @@
         "NSPredictionMarketUsageDescription": "Predich allows you to trade virtual credits on real-world events.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "4"
+      "buildNumber": "5"
     },
     "android": {
       "adaptiveIcon": {
