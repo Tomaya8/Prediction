@@ -233,6 +233,153 @@ export const api = functions.https.onRequest(async (req, res) => {
       ok(res, { leaderboard: lb }); return;
     }
 
+    // ── COMMENTS ──────────────────────────────────────────────────────────
+    if (path.match(/^\/markets\/[^/]+\/comments$/) && method === "GET") {
+      const marketId = path.split("/")[2];
+      const snap = await db.collection("comments").where("marketId", "==", marketId).limit(20).get();
+      const comments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      comments.sort((a: any, b: any) => (b.createdAt?._seconds || 0) - (a.createdAt?._seconds || 0));
+      ok(res, comments); return;
+    }
+
+    if (path.match(/^\/markets\/[^/]+\/comments$/) && method === "POST") {
+      const user = await auth(req);
+      if (!user) { fail(res, "Auth required", 401); return; }
+      const marketId = path.split("/")[2];
+      const { content } = req.body;
+      if (!content?.trim()) { fail(res, "Content required"); return; }
+      const userDoc = await db.collection("users").doc(user.id).get();
+      const displayName = userDoc.exists ? userDoc.data()!.displayName : "Anonymous";
+      const ref = await db.collection("comments").add({
+        marketId, userId: user.id, content: content.trim(), likes: 0,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        user: { id: user.id, displayName },
+      });
+      ok(res, { id: ref.id, marketId, userId: user.id, content: content.trim(), likes: 0, user: { id: user.id, displayName } }, 201); return;
+    }
+
+    if (path.match(/^\/markets\/[^/]+\/comments\/[^/]+\/like$/) && method === "POST") {
+      const parts = path.split("/"); const commentId = parts[4];
+      await db.collection("comments").doc(commentId).update({ likes: admin.firestore.FieldValue.increment(1) });
+      ok(res, { message: "Liked" }); return;
+    }
+
+    // ── ACHIEVEMENTS ─────────────────────────────────────────────────────
+    if (path === "/leaderboard/achievements" && method === "GET") {
+      const snap = await db.collection("achievements").orderBy("criteriaValue", "asc").get();
+      if (snap.empty) {
+        // Return default achievements if none in DB
+        ok(res, [
+          { id: "1", code: "FIRST_TRADE", name: "First Trade", description: "Complete your first trade", criteriaType: "TRADES", criteriaValue: 1, creditReward: 50, earned: false },
+          { id: "2", code: "STREAK_5", name: "5-Day Streak", description: "Login 5 days in a row", criteriaType: "STREAK", criteriaValue: 5, creditReward: 100, earned: false },
+          { id: "3", code: "TRADES_10", name: "Active Trader", description: "Complete 10 trades", criteriaType: "TRADES", criteriaValue: 10, creditReward: 200, earned: false },
+          { id: "4", code: "TRADES_50", name: "Power Trader", description: "Complete 50 trades", criteriaType: "TRADES", criteriaValue: 50, creditReward: 500, earned: false },
+          { id: "5", code: "STREAK_30", name: "Monthly Streak", description: "Login 30 days in a row", criteriaType: "STREAK", criteriaValue: 30, creditReward: 500, earned: false },
+          { id: "6", code: "WINS_10", name: "Winner", description: "Win 10 predictions", criteriaType: "WINS", criteriaValue: 10, creditReward: 300, earned: false },
+        ]); return;
+      }
+      ok(res, snap.docs.map(d => ({ id: d.id, ...d.data(), earned: false }))); return;
+    }
+
+    // ── SOCIAL (friends, follow) ─────────────────────────────────────────
+    if (path === "/social/friends" && method === "GET") {
+      const user = await auth(req);
+      if (!user) { fail(res, "Auth required", 401); return; }
+      const snap = await db.collection("follows").where("followerId", "==", user.id).get();
+      const friends: any[] = [];
+      for (const doc of snap.docs) {
+        const f = doc.data();
+        const uDoc = await db.collection("users").doc(f.followingId).get();
+        if (uDoc.exists) {
+          const d = uDoc.data()!;
+          friends.push({ id: uDoc.id, displayName: d.displayName, creditBalance: d.creditBalance, totalTrades: d.totalTrades || 0, winRate: d.totalTrades > 0 ? Math.round((d.winningTrades / d.totalTrades) * 100) : 0 });
+        }
+      }
+      ok(res, friends); return;
+    }
+
+    if (path.match(/^\/social\/follow\/[^/]+$/) && method === "POST") {
+      const user = await auth(req);
+      if (!user) { fail(res, "Auth required", 401); return; }
+      const followingId = path.split("/")[3];
+      if (followingId === user.id) { fail(res, "Cannot follow yourself"); return; }
+      const docId = `${user.id}_${followingId}`;
+      await db.collection("follows").doc(docId).set({ followerId: user.id, followingId, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+      ok(res, { message: "Following" }); return;
+    }
+
+    if (path.match(/^\/social\/follow\/[^/]+$/) && method === "DELETE") {
+      const user = await auth(req);
+      if (!user) { fail(res, "Auth required", 401); return; }
+      const followingId = path.split("/")[3];
+      const docId = `${user.id}_${followingId}`;
+      await db.collection("follows").doc(docId).delete();
+      ok(res, { message: "Unfollowed" }); return;
+    }
+
+    if (path === "/social/challenges" && method === "GET") {
+      const user = await auth(req);
+      if (!user) { fail(res, "Auth required", 401); return; }
+      ok(res, []); return; // Empty for now
+    }
+
+    if (path === "/social/referral" && method === "GET") {
+      const user = await auth(req);
+      if (!user) { fail(res, "Auth required", 401); return; }
+      const doc = await db.collection("users").doc(user.id).get();
+      const d = doc.data() || {};
+      ok(res, { referralCode: d.referralCode || user.id.slice(0, 8).toUpperCase(), referralCount: 0, creditsEarned: 0 }); return;
+    }
+
+    // ── PROPOSALS ─────────────────────────────────────────────────────────
+    if (path === "/proposals" && method === "GET") {
+      const status = (req.query.status as string) || "PENDING";
+      const snap = await db.collection("proposals").where("status", "==", status).limit(20).get();
+      const proposals = snap.docs.map(d => ({ id: d.id, ...d.data(), hasVoted: false }));
+      proposals.sort((a: any, b: any) => (b.upvotes || 0) - (a.upvotes || 0));
+      ok(res, proposals); return;
+    }
+
+    if (path === "/proposals" && method === "POST") {
+      const user = await auth(req);
+      if (!user) { fail(res, "Auth required", 401); return; }
+      const { title, description, category, outcomes, suggestedExpiry, resolutionCriteria } = req.body;
+      if (!title?.trim()) { fail(res, "Title required"); return; }
+      const userDoc = await db.collection("users").doc(user.id).get();
+      const displayName = userDoc.exists ? userDoc.data()!.displayName : "Anonymous";
+      const ref = await db.collection("proposals").add({
+        title: title.trim(), description: description?.trim() || null, category: category || "OTHER",
+        outcomes: outcomes || ["Yes", "No"], suggestedExpiry: suggestedExpiry || "", resolutionCriteria: resolutionCriteria || null,
+        status: "PENDING", upvotes: 0, createdById: user.id,
+        createdBy: { id: user.id, displayName },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      ok(res, { id: ref.id, title: title.trim(), status: "PENDING", upvotes: 0, createdBy: { id: user.id, displayName } }, 201); return;
+    }
+
+    if (path === "/proposals/mine" && method === "GET") {
+      const user = await auth(req);
+      if (!user) { fail(res, "Auth required", 401); return; }
+      const snap = await db.collection("proposals").where("createdById", "==", user.id).limit(20).get();
+      const proposals = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      proposals.sort((a: any, b: any) => (b.createdAt?._seconds || 0) - (a.createdAt?._seconds || 0));
+      ok(res, proposals); return;
+    }
+
+    if (path.match(/^\/proposals\/[^/]+\/vote$/) && method === "POST") {
+      const user = await auth(req);
+      if (!user) { fail(res, "Auth required", 401); return; }
+      const proposalId = path.split("/")[2];
+      await db.collection("proposals").doc(proposalId).update({ upvotes: admin.firestore.FieldValue.increment(1) });
+      ok(res, { message: "Voted" }); return;
+    }
+
+    // ── TOURNAMENTS ──────────────────────────────────────────────────────
+    if (path === "/tournaments" && method === "GET") {
+      const snap = await db.collection("tournaments").get();
+      ok(res, snap.docs.map(d => ({ id: d.id, ...d.data(), participants: 0 }))); return;
+    }
+
     // ── HEALTH ────────────────────────────────────────────────────────────
     if (path === "/health" || path === "/") { ok(res, { status: "ok" }); return; }
 
@@ -242,4 +389,3 @@ export const api = functions.https.onRequest(async (req, res) => {
     fail(res, e.message || "Internal server error", 500);
   }
 });
-// Deployed: Mon Mar 23 21:57:49 IST 2026

@@ -390,7 +390,16 @@ export default function MarketDetailScreen() {
         {/* Challenge a Friend */}
         <TouchableOpacity
           style={styles.challengeSection}
-          onPress={() => router.push('/(tabs)/friends')}
+          onPress={() => {
+            Alert.alert(
+              'Challenge a Friend',
+              'Go to Friends tab to challenge someone on this market?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Go', onPress: () => router.push('/(tabs)/friends') },
+              ]
+            );
+          }}
         >
           <View style={styles.challengeLeft}>
             <Text style={styles.challengeIcon}>🎯</Text>
