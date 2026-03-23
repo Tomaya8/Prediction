@@ -6,7 +6,7 @@
 
 import * as SecureStore from 'expo-secure-store';
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/api';
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://us-central1-prediction-app-2026.cloudfunctions.net/api';
 
 const AUTH_TOKEN_KEY = 'auth_token';
 const USER_KEY = 'auth_user';
