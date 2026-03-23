@@ -5,6 +5,7 @@
  */
 
 import * as SecureStore from 'expo-secure-store';
+import { apiClient } from './api-client';
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://us-central1-prediction-app-2026.cloudfunctions.net/api';
 
@@ -60,10 +61,12 @@ export async function signIn(email: string, password: string): Promise<AuthUser>
   const json = await res.json();
   if (!json.success) {
     const err: any = new Error(json.error || 'Sign in failed');
-    err.code = json.error; // e.g. 'auth/invalid-credential'
+    err.code = json.error;
     throw err;
   }
   const { token, user } = json.data;
+  // Set token on apiClient immediately (before async storage)
+  apiClient.setAuthToken(token);
   await storeSession(token, user);
   notifyListeners(user);
   return user;
@@ -86,12 +89,15 @@ export async function signUp(
     throw err;
   }
   const { token, user } = json.data;
+  // Set token on apiClient immediately (before async storage)
+  apiClient.setAuthToken(token);
   await storeSession(token, user);
   notifyListeners(user);
   return user;
 }
 
 export async function signOut(): Promise<void> {
+  apiClient.setAuthToken(null);
   await clearSession();
   notifyListeners(null);
 }
