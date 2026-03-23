@@ -144,8 +144,13 @@ export const api = functions.https.onRequest(async (req, res) => {
 
       const marketRef = db.collection("markets").doc(marketId);
       const userRef = db.collection("users").doc(user.id);
+      const hId = `${user.id}_${marketId}_${outcomeId}`;
+      const hRef = db.collection("holdings").doc(hId);
       const result = await db.runTransaction(async (tx) => {
-        const mDoc = await tx.get(marketRef); const uDoc = await tx.get(userRef);
+        // ALL reads first (Firestore requirement)
+        const mDoc = await tx.get(marketRef);
+        const uDoc = await tx.get(userRef);
+        const hDoc = await tx.get(hRef);
         if (!mDoc.exists) throw new Error("Market not found");
         if (!uDoc.exists) throw new Error("User not found");
         const mD = mDoc.data()!; const uD = uDoc.data()!;
@@ -153,11 +158,10 @@ export const api = functions.https.onRequest(async (req, res) => {
         const c = Math.max(1, Math.round(buyCost(oc, b, outcomeId, amount)));
         if (uD.creditBalance < c) throw new Error("Insufficient credits");
         const updated = oc.map((o: any) => o.id === outcomeId ? { ...o, quantity: o.quantity + amount } : o);
+        // ALL writes after reads
         tx.update(marketRef, { outcomes: updated, totalVolume: (mD.totalVolume || 0) + c });
         tx.update(userRef, { creditBalance: uD.creditBalance - c, totalCreditsSpent: (uD.totalCreditsSpent || 0) + c, totalTrades: (uD.totalTrades || 0) + 1 });
         tx.set(db.collection("trades").doc(), { userId: user.id, marketId, outcomeId, type: "BUY", quantity: amount, totalCost: c, createdAt: admin.firestore.FieldValue.serverTimestamp() });
-        const hId = `${user.id}_${marketId}_${outcomeId}`; const hRef = db.collection("holdings").doc(hId);
-        const hDoc = await tx.get(hRef);
         if (hDoc.exists) { const h = hDoc.data()!; const nq = h.quantity + amount; tx.update(hRef, { quantity: nq, avgCost: (h.avgCost * h.quantity + (c / amount) * amount) / nq }); }
         else { tx.set(hRef, { userId: user.id, marketId, outcomeId, quantity: amount, avgCost: c / amount }); }
         tx.set(db.collection("transactions").doc(), { userId: user.id, amount: -c, type: "TRADE_BUY", description: `Bought ${amount} shares`, referenceId: marketId, createdAt: admin.firestore.FieldValue.serverTimestamp() });
@@ -238,3 +242,4 @@ export const api = functions.https.onRequest(async (req, res) => {
     fail(res, e.message || "Internal server error", 500);
   }
 });
+// Deployed: Mon Mar 23 21:57:49 IST 2026
