@@ -2,19 +2,35 @@
 
 A Polymarket-inspired virtual credit prediction market app. Trade on real-world events with virtual credits — no real money, no risk.
 
+**Live on TestFlight** — App Store Connect ID: `6760973639`
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Mobile** | React Native + Expo (SDK 52) + Expo Router |
+| **Backend** | Firebase Cloud Functions (Node.js 20) |
+| **Database** | Cloud Firestore |
+| **Auth** | JWT (email/password) with bcrypt |
+| **Admin** | Next.js 14 + Tailwind CSS |
+| **Hosting** | Firebase Hosting + Cloud Functions |
+
+**API URL:** `https://us-central1-prediction-app-2026.cloudfunctions.net/api`
+**Firebase Project:** `prediction-app-2026`
+
 ## Features
 
 ### Core Trading
 - **140+ Prediction Markets** across 8 categories (Politics, Sports, Crypto, Entertainment, Science, Technology, Business)
 - **LMSR Automated Market Making** — buy and sell shares with instant pricing
-- **Real-time Price Updates** via WebSocket
 - **Portfolio Tracking** with P&L, cost basis, and win/loss history
+- **1000 Starting Credits** on sign-up
 
 ### Social & Competitive
 - **Tournaments** — join daily/weekly/monthly competitions, P&L-based leaderboards, prize payouts
 - **Friend Challenges** — head-to-head wagers on any market, auto-resolution on market settlement
-- **Leaderboard** — global rankings by credits or ROI, follow top traders
-- **User Search** — find and follow users by name
+- **Leaderboard** — global rankings by credits or ROI, follow top traders directly
+- **User Search** — find and follow users by name from Friends tab
 - **Referral System** — earn 200 credits per invited friend
 
 ### Market Proposals
@@ -24,20 +40,10 @@ A Polymarket-inspired virtual credit prediction market app. Trade on real-world 
 
 ### Design
 - **Light + Dark Mode** — instant toggle, reactive theme system
-- **Design Tokens** — consistent spacing, radius, typography scale
+- **Design Tokens** — consistent spacing (Spacing), radius (Radius), typography (FontSize)
 - **Custom Toast/Confirm** — branded pop-ups instead of native alerts
 - **WCAG AA Accessible** — contrast ratios meet accessibility standards
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| **Mobile** | React Native + Expo (SDK 52) + Expo Router |
-| **Backend** | Node.js + Express + TypeScript |
-| **Database** | PostgreSQL + Prisma ORM |
-| **Auth** | JWT (email/password) with bcrypt |
-| **Admin** | Next.js 14 + Tailwind CSS |
-| **Real-time** | WebSocket (ws) + Socket.IO |
+- **Ionicons** throughout — no emoji decorations in UI
 
 ## Project Structure
 
@@ -53,173 +59,142 @@ Predich/
 │   │       ├── colors.ts     # Theme system (light/dark, design tokens)
 │   │       ├── api-client.ts # API client with retry logic
 │   │       ├── auth.ts       # JWT auth with SecureStore
-│   │       └── components/   # Reusable components (Toast, TrendingMarkets, Comments)
-│   └── app.json              # Expo config
+│   │       └── components/   # Toast, TrendingMarkets, Comments
+│   ├── app.json              # Expo config
+│   └── eas.json              # EAS build + submit config
 │
-├── backend/                   # Express.js API server
+├── functions/                 # Firebase Cloud Functions (production backend)
+│   └── src/
+│       └── index.ts          # All API routes (auth, markets, trades, users, leaderboard)
+│
+├── backend/                   # Express.js API server (local development)
 │   ├── prisma/
 │   │   └── schema.prisma     # Database schema (20+ models)
 │   └── src/
-│       ├── routes/
-│       │   ├── auth.ts       # Register, login (rate-limited)
-│       │   ├── markets.ts    # CRUD, resolve, cancel, comments
-│       │   ├── trades.ts     # Buy, sell, portfolio, LMSR pricing
-│       │   ├── users.ts      # Profile, search, daily rewards, achievements
-│       │   ├── tournaments.ts # Join, resolve, leaderboard, tick
-│       │   ├── social.ts     # Follow, challenges, referrals, timeouts
-│       │   ├── proposals.ts  # Submit, vote, approve/reject
-│       │   ├── leaderboard.ts # Rankings, achievements
-│       │   └── admin.ts      # Stats, user management, market sync
+│       ├── routes/           # All route handlers
 │       ├── middleware/auth.ts # JWT + Firebase token verification
 │       ├── lib/lmsr.ts       # LMSR pricing engine
 │       └── scripts/
 │           ├── seed-prisma.ts # Seed 140 markets
 │           └── sync-markets.ts # Scrape Polymarket + Manifold
 │
-└── frontend/                  # Admin dashboard (Next.js)
-    └── src/app/admin/
-        ├── page.tsx           # Dashboard with stats + charts
-        ├── markets/           # Market management
-        ├── users/             # User management
-        └── proposals/         # Proposal approval queue
+├── frontend/                  # Admin dashboard (Next.js)
+│   └── src/app/admin/
+│       ├── page.tsx           # Dashboard with stats
+│       ├── markets/           # Market management
+│       ├── users/             # User management
+│       └── proposals/         # Proposal approval queue
+│
+├── firebase.json              # Firebase config (functions + hosting + firestore)
+└── .firebaserc                # Firebase project: prediction-app-2026
 ```
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+
-- PostgreSQL database
-- npm or yarn
+- Node.js 20+
+- Firebase CLI (`npm install -g firebase-tools`)
+- Expo CLI
+- EAS CLI (`npm install -g eas-cli`)
 
 ### 1. Install Dependencies
 
 ```bash
-cd backend && npm install
+cd functions && npm install
 cd ../mobile && npm install
-cd ../frontend && npm install
+cd ../backend && npm install    # for local dev
+cd ../frontend && npm install   # for admin dashboard
 ```
 
 ### 2. Environment Variables
 
-#### Backend (`backend/.env`)
-```env
-DATABASE_URL=postgresql://user:password@localhost:5432/predictspinz
-JWT_SECRET=your-secure-random-secret-key
-FRONTEND_URL=http://localhost:3000
-# Optional: Firebase (for Firebase token auth)
-FIREBASE_PROJECT_ID=your-project-id
-FIREBASE_CLIENT_EMAIL=firebase-adminsdk@your-project.iam.gserviceaccount.com
-FIREBASE_PRIVATE_KEY="your_private_key"
-```
-
 #### Mobile (`mobile/.env`)
 ```env
-EXPO_PUBLIC_API_URL=http://localhost:3001/api
+EXPO_PUBLIC_API_URL=https://us-central1-prediction-app-2026.cloudfunctions.net/api
+```
+
+#### Backend — Local Dev (`backend/.env`)
+```env
+DATABASE_URL=postgresql://user:password@localhost:5432/predich
+JWT_SECRET=your-secret-key
 ```
 
 #### Admin (`frontend/.env.local`)
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:3001/api
+NEXT_PUBLIC_API_URL=https://us-central1-prediction-app-2026.cloudfunctions.net/api
 ```
 
-### 3. Database Setup
+### 3. Run Locally
+
+```bash
+# Backend (local Express + PostgreSQL)
+cd backend && npm run dev
+
+# Mobile (Expo)
+cd mobile && npx expo start --ios
+
+# Admin Dashboard
+cd frontend && npm run dev
+```
+
+### 4. Deploy Cloud Functions
+
+```bash
+cd functions && npm run build
+firebase deploy --only functions --project prediction-app-2026
+```
+
+### 5. Seed Markets (local PostgreSQL)
 
 ```bash
 cd backend
-npx prisma migrate dev    # Create tables
-npx ts-node src/scripts/seed-prisma.ts  # Seed 140 markets
-```
-
-### 4. Run
-
-```bash
-# Terminal 1: Backend
-cd backend && npm run dev
-
-# Terminal 2: Mobile
-cd mobile && npx expo start --ios
-
-# Terminal 3: Admin (optional)
-cd frontend && npm run dev
+npx prisma migrate dev
+npx ts-node src/scripts/seed-prisma.ts
 ```
 
 ## API Endpoints
 
+**Base URL:** `https://us-central1-prediction-app-2026.cloudfunctions.net/api`
+
 ### Auth
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/api/auth/register` | - | Create account (rate-limited: 10/15min) |
-| POST | `/api/auth/login` | - | Sign in, get JWT |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/auth/register` | Create account (email, password, displayName) |
+| POST | `/auth/login` | Sign in, get JWT token |
 
 ### Markets
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/api/markets` | - | List markets (filterable by category, status) |
-| GET | `/api/markets/:id` | - | Market detail with outcomes, comments |
-| GET | `/api/markets/meta/categories` | - | Available categories |
-| GET | `/api/markets/meta/trending` | - | Top 10 by volume |
-| POST | `/api/markets` | Admin | Create market |
-| POST | `/api/markets/:id/resolve` | Admin | Resolve with winning outcome |
-| POST | `/api/markets/:id/cancel` | Admin | Cancel and refund holders |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/markets` | List markets (filterable by category) |
+| GET | `/markets/:id` | Market detail with LMSR prices |
+| GET | `/trades/markets` | Alias for `/markets` (mobile compat) |
+| GET | `/trades/markets/:id` | Alias for `/markets/:id` |
 
 ### Trading
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| POST | `/api/trades/trade` | User | Buy shares (LMSR pricing) |
-| POST | `/api/trades/sell` | User | Sell shares |
-| POST | `/api/trades/preview` | - | Preview cost before buying |
-| POST | `/api/trades/preview-by-cost` | - | Calculate shares for credit amount |
-| GET | `/api/trades/portfolio/:userId` | - | User portfolio with P&L |
+| POST | `/trades/preview-by-cost` | - | Preview shares for credit amount |
+| POST | `/trades/trade` | JWT | Buy shares (LMSR pricing, Firestore transaction) |
+| GET | `/trades/portfolio/:userId` | - | User portfolio with P&L |
 
 ### Users
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/api/users/me` | User | Current user profile |
-| GET | `/api/users/search?q=name` | - | Search users by display name |
-| GET | `/api/users/me/transactions` | User | Transaction history |
-| GET | `/api/users/me/stats` | User | Detailed statistics |
-| POST | `/api/users/me/daily-reward` | User | Claim daily reward (streak bonus) |
+| GET | `/users/me` | JWT | Current user profile + stats |
+| GET | `/users/me/transactions` | JWT | Transaction history |
+| POST | `/users/me/daily-reward` | JWT | Claim daily reward (streak bonus) |
+| GET | `/users/search?q=name` | - | Search users by display name |
 
-### Social
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/api/social/friends` | User | List followed users |
-| POST | `/api/social/follow/:userId` | User | Follow a user |
-| DELETE | `/api/social/follow/:userId` | User | Unfollow |
-| GET | `/api/social/challenges` | User | List challenges |
-| POST | `/api/social/challenges` | User | Create challenge (escrow credits) |
-| PUT | `/api/social/challenges/:id/accept` | User | Accept with outcome pick |
-| PUT | `/api/social/challenges/:id/decline` | User | Decline (refund challenger) |
-| GET | `/api/social/referral` | User | Referral code + stats |
+### Leaderboard
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/leaderboard` | Top 50 users by credits |
 
-### Tournaments
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/api/tournaments` | - | List tournaments |
-| POST | `/api/tournaments/:id/join` | User | Join (deducts entry fee) |
-| GET | `/api/tournaments/:id/leaderboard` | - | Ranked participants by P&L |
-| POST | `/api/tournaments/:id/resolve` | Admin | Distribute prizes |
-| POST | `/api/tournaments/tick` | - | Auto-transition statuses |
-
-### Proposals
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/api/proposals` | User | Submit market proposal |
-| GET | `/api/proposals` | - | Browse proposals (sort by votes/newest) |
-| GET | `/api/proposals/mine` | User | My proposals + status |
-| POST | `/api/proposals/:id/vote` | User | Upvote a proposal |
-| POST | `/api/proposals/:id/approve` | Admin | Approve → creates market + 50 credits |
-| POST | `/api/proposals/:id/reject` | Admin | Reject with reason |
-
-### Admin
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/api/admin/stats` | Admin | Dashboard statistics |
-| GET | `/api/admin/users` | Admin | List/search users |
-| POST | `/api/admin/users/:id/credits` | Admin | Adjust credits |
-| POST | `/api/admin/users/:id/ban` | Admin | Ban/unban user |
-| POST | `/api/admin/sync-markets` | Admin | Scrape Polymarket + Manifold |
+### Health
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | API health check |
 
 ## Market Auto-Sync
 
@@ -231,24 +206,21 @@ cd backend && npx ts-node src/scripts/sync-markets.ts
 
 # Loop mode (every 30 minutes)
 npx ts-node src/scripts/sync-markets.ts --loop 30
-
-# Or trigger via admin API
-POST /api/admin/sync-markets
 ```
 
 **Sources:**
-- Polymarket (gamma-api.polymarket.com) — top 30 by 24h volume
-- Manifold Markets (api.manifold.markets) — top 20 trending
+- **Polymarket** (gamma-api.polymarket.com) — top 30 by 24h volume
+- **Manifold Markets** (api.manifold.markets) — top 20 trending
 
 ## LMSR Pricing
 
-The app uses Logarithmic Market Scoring Rule for automated market making:
+Logarithmic Market Scoring Rule for automated market making:
 
-- **Cost**: `cost = b * ln(sum(exp(q_i / b)))`
-- **Price**: `price_i = exp(q_i / b) / sum(exp(q_j / b))`
+- **Cost:** `cost = b * ln(sum(exp(q_i / b)))`
+- **Price:** `price_i = exp(q_i / b) / sum(exp(q_j / b))`
 - **Liquidity parameter** `b = 1000` (default)
 
-Prices range from 0-100 cents. Higher price = market thinks outcome is more likely.
+Prices range 0-100 cents. Higher price = market thinks outcome is more likely.
 
 ## Markets
 
@@ -264,6 +236,50 @@ Prices range from 0-100 cents. Higher price = market thinks outcome is more like
 | Technology | 20 | GPT-5, Apple AR glasses, robotaxis, AI regulation |
 | Business | 20 | S&P 7000, Fed rates, SpaceX IPO, Nvidia stock |
 | Other | varies | Auto-synced from Polymarket and Manifold |
+
+## Build & Deploy
+
+### iOS (TestFlight)
+
+```bash
+cd mobile
+
+# 1. Set up credentials (first time only)
+eas credentials --platform ios
+
+# 2. Build locally
+eas build --platform ios --profile production --local
+
+# 3. Submit to TestFlight
+EXPO_APPLE_ID="cappsino@gmail.com" \
+EXPO_APPLE_APP_SPECIFIC_PASSWORD="wfji-zass-lfqz-ijyj" \
+eas submit --platform ios --profile production --path ./build-*.ipa --non-interactive
+```
+
+### Firebase Cloud Functions
+
+```bash
+cd functions
+npm run build
+firebase deploy --only functions --project prediction-app-2026
+
+# Make function public (first time only)
+gcloud functions add-invoker-policy-binding api \
+  --project=prediction-app-2026 \
+  --region=us-central1 \
+  --member=allUsers
+```
+
+## App Store Info
+
+| Field | Value |
+|-------|-------|
+| **App Name** | Predich |
+| **Bundle ID** | com.predich.app |
+| **ASC App ID** | 6760973639 |
+| **Apple Team** | W39ZC35R76 (Tomaya LTD) |
+| **EAS Project** | @tomaya/predictspinz |
+| **Firebase Project** | prediction-app-2026 |
 
 ## License
 
