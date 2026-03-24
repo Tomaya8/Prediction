@@ -64,7 +64,7 @@ export default function PortfolioScreen() {
     setRefreshing(false);
   };
 
-  const activeHoldings = holdings.filter(h => h.marketStatus === 'ACTIVE');
+  const activeHoldings = holdings.filter(h => h.marketStatus !== 'RESOLVED' && h.marketStatus !== 'CANCELLED');
   const resolvedHoldings = holdings.filter(h => h.marketStatus === 'RESOLVED');
 
   const totalValue = activeHoldings.reduce((s, h) => s + h.currentValue, 0);

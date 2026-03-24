@@ -137,7 +137,17 @@ export default function MarketDetailScreen() {
 
   const fetchComments = useCallback(async () => {
     const res = await apiClient.getComments(marketId);
-    if (res.success && res.data) setComments(res.data);
+    if (res.success && res.data) {
+      // Map API format to Comment component format
+      setComments(res.data.map((c: any) => ({
+        id: c.id,
+        userId: c.userId || c.user?.id || '',
+        userName: c.user?.displayName || c.userName || 'Anonymous',
+        content: c.content || '',
+        createdAt: c.createdAt?._seconds ? new Date(c.createdAt._seconds * 1000).toISOString() : c.createdAt || new Date().toISOString(),
+        likes: c.likes || 0,
+      })));
+    }
   }, [marketId]);
 
   useEffect(() => { fetchComments(); }, [fetchComments]);
@@ -391,14 +401,8 @@ export default function MarketDetailScreen() {
         <TouchableOpacity
           style={styles.challengeSection}
           onPress={() => {
-            Alert.alert(
-              'Challenge a Friend',
-              'Go to Friends tab to challenge someone on this market?',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Go', onPress: () => router.push('/(tabs)/friends') },
-              ]
-            );
+            router.back();
+            setTimeout(() => router.push('/(tabs)/friends'), 100);
           }}
         >
           <View style={styles.challengeLeft}>
