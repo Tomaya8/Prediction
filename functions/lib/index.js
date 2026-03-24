@@ -324,13 +324,32 @@ exports.api = functions.https.onRequest(async (req, res) => {
             ok(res, { cost, pricePerShare: cost / amount, amount });
             return;
         }
+        if (path === "/trades/preview-sell" && method === "POST") {
+            const { marketId, outcomeId, amount } = req.body;
+            if (!marketId || !outcomeId || !amount || amount <= 0) {
+                fail(res, "Missing fields");
+                return;
+            }
+            const doc = await db.collection("markets").doc(marketId).get();
+            if (!doc.exists) {
+                fail(res, "Market not found", 404);
+                return;
+            }
+            const d = doc.data();
+            const oc = parseOutcomes(d, doc.id);
+            const b = d.liquidityParameter || 1000;
+            const revenue = Math.max(0, Math.round(-buyCost(oc, b, outcomeId, -amount)));
+            const currentPrice = prices(oc, b)[outcomeId] || 0;
+            ok(res, { revenue, pricePerShare: amount > 0 ? revenue / amount : 0, amount, currentPrice });
+            return;
+        }
         if (path === "/trades/trade" && method === "POST") {
             const user = await auth(req);
             if (!user) {
                 fail(res, "Auth required", 401);
                 return;
             }
-            const { marketId, outcomeId, amount } = req.body;
+            const { marketId, outcomeId, amount, maxCost } = req.body;
             if (!marketId || !outcomeId || !amount || amount <= 0 || typeof amount !== "number") {
                 fail(res, "Missing or invalid fields");
                 return;
@@ -360,6 +379,8 @@ exports.api = functions.https.onRequest(async (req, res) => {
                 const c = Math.max(1, Math.round(buyCost(oc, b, outcomeId, amount)));
                 if (uD.creditBalance < c)
                     throw new Error("Insufficient credits");
+                if (maxCost && c > maxCost)
+                    throw new Error(`Price moved. Cost ${c} exceeds max ${maxCost}`);
                 const updated = oc.map((o) => o.id === outcomeId ? { ...o, quantity: o.quantity + amount } : o);
                 tx.update(marketRef, { outcomes: updated, totalVolume: (mD.totalVolume || 0) + c });
                 tx.update(userRef, { creditBalance: uD.creditBalance - c, totalCreditsSpent: (uD.totalCreditsSpent || 0) + c, totalTrades: (uD.totalTrades || 0) + 1 });
@@ -373,7 +394,10 @@ exports.api = functions.https.onRequest(async (req, res) => {
                     tx.set(hRef, { userId: user.id, marketId, outcomeId, quantity: amount, avgCost: c / amount });
                 }
                 tx.set(db.collection("transactions").doc(), { userId: user.id, amount: -c, type: "TRADE_BUY", description: `Bought ${amount} shares`, referenceId: marketId, createdAt: admin.firestore.FieldValue.serverTimestamp() });
-                return { cost: c, newBalance: uD.creditBalance - c, prices: prices(updated, b), shares: amount };
+                const newPrices = prices(updated, b);
+                // Record price history snapshot
+                tx.set(db.collection("price_history").doc(), { marketId, prices: newPrices, timestamp: admin.firestore.FieldValue.serverTimestamp() });
+                return { cost: c, newBalance: uD.creditBalance - c, prices: newPrices, shares: amount };
             });
             ok(res, result);
             return;
@@ -422,9 +446,35 @@ exports.api = functions.https.onRequest(async (req, res) => {
                 }
                 tx.set(db.collection("trades").doc(), { userId: user.id, marketId, outcomeId, type: "SELL", quantity: amount, totalCost: revenue, createdAt: admin.firestore.FieldValue.serverTimestamp() });
                 tx.set(db.collection("transactions").doc(), { userId: user.id, amount: revenue, type: "TRADE_SELL", description: `Sold ${amount} shares`, referenceId: marketId, createdAt: admin.firestore.FieldValue.serverTimestamp() });
-                return { revenue, newBalance: uD.creditBalance + revenue, prices: prices(updated, b), shares: amount };
+                const newPrices = prices(updated, b);
+                tx.set(db.collection("price_history").doc(), { marketId, prices: newPrices, timestamp: admin.firestore.FieldValue.serverTimestamp() });
+                return { revenue, newBalance: uD.creditBalance + revenue, prices: newPrices, shares: amount };
             });
             ok(res, result);
+            return;
+        }
+        if (path.match(/^\/markets\/[^/]+\/price-history$/) && method === "GET") {
+            const marketId = path.split("/")[2];
+            const snap = await db.collection("price_history").where("marketId", "==", marketId).orderBy("timestamp", "desc").limit(50).get();
+            if (snap.empty) {
+                // Return current prices as single data point
+                const doc = await db.collection("markets").doc(marketId).get();
+                if (doc.exists) {
+                    const d = doc.data();
+                    const oc = parseOutcomes(d, doc.id);
+                    const p = prices(oc, d.liquidityParameter || 1000);
+                    ok(res, [{ prices: p, timestamp: new Date().toISOString() }]);
+                }
+                else {
+                    ok(res, []);
+                }
+                return;
+            }
+            ok(res, snap.docs.map(d => {
+                var _a, _b, _c;
+                const data = d.data();
+                return { prices: data.prices, timestamp: ((_c = (_b = (_a = data.timestamp) === null || _a === void 0 ? void 0 : _a.toDate) === null || _b === void 0 ? void 0 : _b.call(_a)) === null || _c === void 0 ? void 0 : _c.toISOString()) || new Date().toISOString() };
+            }).reverse());
             return;
         }
         if (path.match(/^\/trades\/portfolio\/[^/]+$/) && method === "GET") {

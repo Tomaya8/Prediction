@@ -33,6 +33,7 @@ export default function MarketDetailScreen() {
   const [userBalance, setUserBalance] = useState<number | null>(null);
   const [previewShares, setPreviewShares] = useState<number | null>(null);
   const [previewActualCost, setPreviewActualCost] = useState<number | null>(null);
+  const [sellPreviewRevenue, setSellPreviewRevenue] = useState<number | null>(null);
   const [executingTrade, setExecutingTrade] = useState(false);
   const [userHoldings, setUserHoldings] = useState<Record<string, number>>({});
 
@@ -101,17 +102,31 @@ export default function MarketDetailScreen() {
     if (!selectedOutcome || amt <= 0) {
       setPreviewShares(null);
       setPreviewActualCost(null);
+      setSellPreviewRevenue(null);
       return;
     }
     const mId = Array.isArray(id) ? id[0] : id || '1';
-    apiClient.previewByCost({ marketId: mId, outcomeId: selectedOutcome, credits: amt })
-      .then(res => {
-        if (res.success && res.data) {
-          setPreviewShares(res.data.shares);
-          setPreviewActualCost(res.data.actualCost);
-        }
-      });
-  }, [selectedOutcome, credits, id]);
+
+    if (tradeType === 'BUY') {
+      setSellPreviewRevenue(null);
+      apiClient.previewByCost({ marketId: mId, outcomeId: selectedOutcome, credits: amt })
+        .then(res => {
+          if (res.success && res.data) {
+            setPreviewShares(res.data.shares);
+            setPreviewActualCost(res.data.actualCost);
+          }
+        });
+    } else {
+      setPreviewShares(null);
+      setPreviewActualCost(null);
+      apiClient.previewSell({ marketId: mId, outcomeId: selectedOutcome, amount: amt })
+        .then(res => {
+          if (res.success && res.data) {
+            setSellPreviewRevenue(res.data.revenue);
+          }
+        });
+    }
+  }, [selectedOutcome, credits, id, tradeType]);
 
   // Initial data fetch
   useEffect(() => {
@@ -204,7 +219,9 @@ export default function MarketDetailScreen() {
         onConfirm: async () => {
           setExecutingTrade(true);
           try {
-            const response = await apiClient.executeTrade({ marketId: mktId, outcomeId: selectedOutcome, amount: previewShares });
+            // Pass maxCost for slippage protection (allow 5% above preview)
+            const maxCost = Math.ceil((previewActualCost || 0) * 1.05);
+            const response = await apiClient.executeTrade({ marketId: mktId, outcomeId: selectedOutcome, amount: previewShares, maxCost });
             if (response.success && response.data) {
               const result: TradeResult = response.data;
               setUserBalance(result.newBalance);
@@ -396,29 +413,52 @@ export default function MarketDetailScreen() {
 
           {/* Order Summary */}
           <View style={styles.costSummary}>
-            <View style={styles.costRow}>
-              <Text style={styles.costLabel}>You'll receive</Text>
-              <Text style={styles.costValue}>
-                {previewShares != null ? `${previewShares} shares` : '—'}
-              </Text>
-            </View>
-            <View style={styles.costRow}>
-              <Text style={styles.costLabel}>Estimated cost</Text>
-              <Text style={styles.costValue}>
-                {previewActualCost != null ? `-${previewActualCost} credits` : '—'}
-              </Text>
-            </View>
-            <View style={[styles.costRow, styles.payoutRow]}>
-              <Text style={[styles.costLabel, styles.payoutLabel]}>Max payout</Text>
-              <Text style={[styles.costValue, styles.payoutValue]}>
-                {previewShares != null ? `+${previewShares} credits` : '—'}
-              </Text>
-            </View>
-            {previewActualCost != null && userBalance !== null && (
-              <View style={styles.costRow}>
-                <Text style={styles.costLabel}>Balance after</Text>
-                <Text style={styles.costValue}>{(userBalance - previewActualCost).toLocaleString()} credits</Text>
-              </View>
+            {tradeType === 'BUY' ? (
+              <>
+                <View style={styles.costRow}>
+                  <Text style={styles.costLabel}>You'll receive</Text>
+                  <Text style={styles.costValue}>
+                    {previewShares != null ? `${previewShares} shares` : '—'}
+                  </Text>
+                </View>
+                <View style={styles.costRow}>
+                  <Text style={styles.costLabel}>Estimated cost</Text>
+                  <Text style={styles.costValue}>
+                    {previewActualCost != null ? `-${previewActualCost} credits` : '—'}
+                  </Text>
+                </View>
+                <View style={[styles.costRow, styles.payoutRow]}>
+                  <Text style={[styles.costLabel, styles.payoutLabel]}>Max payout</Text>
+                  <Text style={[styles.costValue, styles.payoutValue]}>
+                    {previewShares != null ? `+${previewShares} credits` : '—'}
+                  </Text>
+                </View>
+                {previewActualCost != null && userBalance !== null && (
+                  <View style={styles.costRow}>
+                    <Text style={styles.costLabel}>Balance after</Text>
+                    <Text style={styles.costValue}>{(userBalance - previewActualCost).toLocaleString()} credits</Text>
+                  </View>
+                )}
+              </>
+            ) : (
+              <>
+                <View style={styles.costRow}>
+                  <Text style={styles.costLabel}>Shares to sell</Text>
+                  <Text style={styles.costValue}>{parseInt(credits) || 0}</Text>
+                </View>
+                <View style={[styles.costRow, styles.payoutRow]}>
+                  <Text style={[styles.costLabel, styles.payoutLabel]}>You'll receive</Text>
+                  <Text style={[styles.costValue, styles.payoutValue]}>
+                    {sellPreviewRevenue != null ? `+${sellPreviewRevenue} credits` : '—'}
+                  </Text>
+                </View>
+                {sellPreviewRevenue != null && userBalance !== null && (
+                  <View style={styles.costRow}>
+                    <Text style={styles.costLabel}>Balance after</Text>
+                    <Text style={styles.costValue}>{(userBalance + sellPreviewRevenue).toLocaleString()} credits</Text>
+                  </View>
+                )}
+              </>
             )}
           </View>
 

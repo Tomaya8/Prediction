@@ -184,11 +184,16 @@ class ApiClient {
     marketId: string;
     outcomeId: string;
     amount: number;
+    maxCost?: number;
   }): Promise<ApiResponse<{ cost: number; newBalance: number; prices: Record<string, number> }>> {
     return this.request('/trades/trade', {
       method: 'POST',
       body: JSON.stringify(params),
     });
+  }
+
+  async previewSell(params: { marketId: string; outcomeId: string; amount: number }): Promise<ApiResponse<{ revenue: number; pricePerShare: number; amount: number; currentPrice: number }>> {
+    return this.request('/trades/preview-sell', { method: 'POST', body: JSON.stringify(params) });
   }
 
   async sellShares(params: {
@@ -200,6 +205,10 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(params),
     });
+  }
+
+  async getPriceHistory(marketId: string): Promise<ApiResponse<any[]>> {
+    return this.request(`/markets/${marketId}/price-history`);
   }
 
   // ============ PORTFOLIO ============
@@ -380,6 +389,7 @@ class ApiClientTyped extends ApiClient {
     marketId: string;
     outcomeId: string;
     amount: number;
+    maxCost?: number;
   }): Promise<ApiResponse<TradeResult>> {
     return super.executeTrade(params) as Promise<ApiResponse<TradeResult>>;
   }
