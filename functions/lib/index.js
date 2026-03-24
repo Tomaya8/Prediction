@@ -127,6 +127,18 @@ function marketToResponse(doc) {
         outcomes: oc.map((o) => ({ ...o, currentPrice: p[o.id] })), prices: p,
     };
 }
+// ─── Rate Limiting (in-memory, per Cloud Function instance) ──────────────────
+const rateLimitMap = new Map();
+function checkRateLimit(ip, limit, windowMs) {
+    const now = Date.now();
+    const entry = rateLimitMap.get(ip);
+    if (!entry || now > entry.resetAt) {
+        rateLimitMap.set(ip, { count: 1, resetAt: now + windowMs });
+        return true;
+    }
+    entry.count++;
+    return entry.count <= limit;
+}
 // ═══════════════════════════════════════════════════════════════════════════════
 exports.api = functions.https.onRequest(async (req, res) => {
     var _a, _b;
@@ -135,8 +147,22 @@ exports.api = functions.https.onRequest(async (req, res) => {
         res.status(204).send("");
         return;
     }
+    const ip = req.ip || req.headers["x-forwarded-for"] || "unknown";
     const path = req.path.replace(/^\/api/, "");
     const method = req.method;
+    // Rate limit auth endpoints more strictly
+    if (path.startsWith("/auth/")) {
+        if (!checkRateLimit(`auth:${ip}`, 10, 60000)) {
+            fail(res, "Too many attempts. Try again later.", 429);
+            return;
+        }
+    }
+    else {
+        if (!checkRateLimit(ip, 100, 60000)) {
+            fail(res, "Rate limit exceeded.", 429);
+            return;
+        }
+    }
     try {
         // ═══════════════════════════════════════════════════════════════════
         // AUTH

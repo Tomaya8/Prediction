@@ -71,6 +71,8 @@ export interface ApiResponse<T> {
 class ApiClient {
   private baseUrl: string;
   private authToken: string | null = null;
+  private cache = new Map<string, { data: any; timestamp: number }>();
+  private CACHE_TTL = 30000; // 30 seconds
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl;
@@ -78,7 +80,28 @@ class ApiClient {
 
   setAuthToken(token: string | null) {
     this.authToken = token;
+    if (!token) this.cache.clear(); // Clear cache on logout
   }
+
+  private getCached<T>(key: string): ApiResponse<T> | null {
+    const entry = this.cache.get(key);
+    if (entry && Date.now() - entry.timestamp < this.CACHE_TTL) {
+      return entry.data;
+    }
+    this.cache.delete(key);
+    return null;
+  }
+
+  private setCache(key: string, data: any): void {
+    this.cache.set(key, { data, timestamp: Date.now() });
+    // Evict old entries if cache grows too large
+    if (this.cache.size > 50) {
+      const oldest = this.cache.keys().next().value;
+      if (oldest) this.cache.delete(oldest);
+    }
+  }
+
+  clearCache(): void { this.cache.clear(); }
 
   private async delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -90,7 +113,14 @@ class ApiClient {
     retryCount: number = 0
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`;
-    
+    const isGet = !options.method || options.method === 'GET';
+
+    // Return cached data for GET requests
+    if (isGet && retryCount === 0) {
+      const cached = this.getCached(endpoint);
+      if (cached) return cached as ApiResponse<T>;
+    }
+
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...(this.authToken && { Authorization: `Bearer ${this.authToken}` }),
@@ -119,7 +149,12 @@ class ApiClient {
       }
 
       // Backend already returns { success, data, error } — return it directly
-      return data as ApiResponse<T>;
+      const result = data as ApiResponse<T>;
+      // Cache successful GET responses
+      if (isGet && result.success) this.setCache(endpoint, result);
+      // Invalidate cache on mutations
+      if (!isGet) this.cache.clear();
+      return result;
     } catch (error) {
       console.error('API request error:', error);
       

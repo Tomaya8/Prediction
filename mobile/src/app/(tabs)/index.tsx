@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
 
-import { TrendingMarkets, showToast } from '../../lib/components';
+import { TrendingMarkets, showToast, MarketListSkeleton } from '../../lib/components';
 import { apiClient, type Market } from '../../lib/api-client';
 import { getStoredUser } from '../../lib/auth';
 
@@ -13,7 +13,7 @@ const CATEGORIES = ['All', 'Politics', 'Sports', 'Crypto', 'Entertainment', 'Sci
 export default function MarketsScreen() {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
-  const [, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [markets, setMarkets] = useState<Market[]>([]);
@@ -243,7 +243,9 @@ export default function MarketsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
         }
       >
-        {filteredMarkets.map((market) => (
+        {loading && markets.length === 0 ? (
+          <MarketListSkeleton count={4} />
+        ) : filteredMarkets.map((market) => (
           <TouchableOpacity
             key={market.id}
             style={styles.marketCard}
