@@ -473,10 +473,10 @@ export default function MarketDetailScreen() {
             style={[
               styles.executeButton,
               tradeType === 'BUY' ? styles.executeBuy : styles.executeSell,
-              (!selectedOutcome || !previewShares || executingTrade) && styles.executeDisabled,
+              (!selectedOutcome || executingTrade || (tradeType === 'BUY' ? !previewShares : !(parseInt(credits) > 0))) && styles.executeDisabled,
             ]}
             onPress={handleTrade}
-            disabled={!selectedOutcome || !previewShares || executingTrade}
+            disabled={!selectedOutcome || executingTrade || (tradeType === 'BUY' ? !previewShares : !(parseInt(credits) > 0))}
           >
             {executingTrade
               ? <ActivityIndicator color={Colors.textPrimary} />

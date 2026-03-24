@@ -115,9 +115,10 @@ class ApiClient {
     const url = `${this.baseUrl}${endpoint}`;
     const isGet = !options.method || options.method === 'GET';
 
-    // Return cached data for GET requests
+    // Return cached data for GET requests (include auth state in key to avoid caching 401s)
+    const cacheKey = `${this.authToken ? 'auth' : 'anon'}:${endpoint}`;
     if (isGet && retryCount === 0) {
-      const cached = this.getCached(endpoint);
+      const cached = this.getCached(cacheKey);
       if (cached) return cached as ApiResponse<T>;
     }
 
@@ -136,8 +137,9 @@ class ApiClient {
         let errorMessage = data.error || 'Request failed';
         if (response.status === 401) {
           errorMessage = 'Unauthorized. Please log in again.';
-          // Clear stale token so the auth guard in _layout.tsx redirects to login
+          // Clear stale token and cache
           this.authToken = null;
+          this.cache.clear();
         } else if (response.status === 403) {
           errorMessage = 'Access denied.';
         } else if (response.status === 404) {
@@ -150,8 +152,8 @@ class ApiClient {
 
       // Backend already returns { success, data, error } — return it directly
       const result = data as ApiResponse<T>;
-      // Cache successful GET responses
-      if (isGet && result.success) this.setCache(endpoint, result);
+      // Only cache successful GET responses (never cache errors)
+      if (isGet && result.success) this.setCache(cacheKey, result);
       // Invalidate cache on mutations
       if (!isGet) this.cache.clear();
       return result;
