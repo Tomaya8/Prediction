@@ -621,6 +621,85 @@ exports.api = functions.https.onRequest(async (req, res) => {
             }));
             return;
         }
+        // ── CREDIT PACKS ──────────────────────────────────────────────────
+        if (path === "/users/credit-packs" && method === "GET") {
+            ok(res, [
+                { code: "starter", name: "Starter Pack", credits: 500, description: "Get back in the game" },
+                { code: "pro", name: "Pro Pack", credits: 2000, description: "For serious traders" },
+                { code: "whale", name: "Whale Pack", credits: 10000, description: "Dominate the leaderboard" },
+            ]);
+            return;
+        }
+        if (path === "/users/me/buy-credits" && method === "POST") {
+            const user = await auth(req);
+            if (!user) {
+                fail(res, "Auth required", 401);
+                return;
+            }
+            const { packCode } = req.body;
+            const packs = { starter: 500, pro: 2000, whale: 10000 };
+            const credits = packs[packCode];
+            if (!credits) {
+                fail(res, "Invalid pack code");
+                return;
+            }
+            // In production: validate payment here. For now: free virtual credits
+            await db.collection("users").doc(user.id).update({
+                creditBalance: admin.firestore.FieldValue.increment(credits),
+                totalCreditsEarned: admin.firestore.FieldValue.increment(credits),
+            });
+            await db.collection("transactions").add({
+                userId: user.id, amount: credits, type: "CREDIT_PURCHASE",
+                description: `Purchased ${packCode} pack (+${credits} credits)`,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            const doc = await db.collection("users").doc(user.id).get();
+            ok(res, { creditsAdded: credits, newBalance: doc.data().creditBalance });
+            return;
+        }
+        // ── ACHIEVEMENT AUTO-TRACKING ────────────────────────────────────
+        if (path === "/users/me/check-achievements" && method === "POST") {
+            const user = await auth(req);
+            if (!user) {
+                fail(res, "Auth required", 401);
+                return;
+            }
+            const doc = await db.collection("users").doc(user.id).get();
+            if (!doc.exists) {
+                fail(res, "User not found", 404);
+                return;
+            }
+            const d = doc.data();
+            const achievements = [
+                { code: "FIRST_TRADE", check: d.totalTrades >= 1, reward: 50 },
+                { code: "TRADES_10", check: d.totalTrades >= 10, reward: 200 },
+                { code: "TRADES_50", check: d.totalTrades >= 50, reward: 500 },
+                { code: "STREAK_5", check: d.currentStreak >= 5, reward: 100 },
+                { code: "STREAK_30", check: d.currentStreak >= 30, reward: 500 },
+                { code: "WINS_10", check: (d.winningTrades || 0) >= 10, reward: 300 },
+            ];
+            // Check which are already earned
+            const earnedSnap = await db.collection("user_achievements").where("userId", "==", user.id).get();
+            const earned = new Set(earnedSnap.docs.map(d => d.data().code));
+            const newlyEarned = [];
+            for (const a of achievements) {
+                if (a.check && !earned.has(a.code)) {
+                    await db.collection("user_achievements").add({ userId: user.id, code: a.code, earnedAt: admin.firestore.FieldValue.serverTimestamp() });
+                    await db.collection("users").doc(user.id).update({
+                        creditBalance: admin.firestore.FieldValue.increment(a.reward),
+                        totalCreditsEarned: admin.firestore.FieldValue.increment(a.reward),
+                    });
+                    await db.collection("transactions").add({
+                        userId: user.id, amount: a.reward, type: "ACHIEVEMENT_REWARD",
+                        description: `Achievement: ${a.code}`,
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    });
+                    newlyEarned.push(a.code);
+                }
+            }
+            ok(res, { newlyEarned, totalEarned: earned.size + newlyEarned.length });
+            return;
+        }
         // ═══════════════════════════════════════════════════════════════════
         // LEADERBOARD
         // ═══════════════════════════════════════════════════════════════════
@@ -862,4 +941,5 @@ exports.api = functions.https.onRequest(async (req, res) => {
         fail(res, e.message || "Internal server error", status);
     }
 });
+// v1.2.0
 //# sourceMappingURL=index.js.map

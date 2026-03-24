@@ -365,6 +365,18 @@ class ApiClient {
 
   // ============ TRANSACTIONS ============
 
+  async getCreditPacks(): Promise<ApiResponse<any[]>> {
+    return this.request('/users/credit-packs');
+  }
+
+  async buyCredits(packCode: string): Promise<ApiResponse<any>> {
+    return this.request('/users/me/buy-credits', { method: 'POST', body: JSON.stringify({ packCode }) });
+  }
+
+  async checkAchievements(): Promise<ApiResponse<any>> {
+    return this.request('/users/me/check-achievements', { method: 'POST' });
+  }
+
   async getTransactions(type?: string): Promise<ApiResponse<any[]>> {
     const q = type ? `?type=${type}` : '';
     return this.request(`/users/me/transactions${q}`);

@@ -230,6 +230,12 @@ export default function MarketDetailScreen() {
               setPreviewActualCost(null);
               showToast({ message: `Bought ${previewShares} shares of ${selectedOutcomeData?.name}`, type: 'success' });
               fetchMarketData();
+              // Check for new achievements after trade
+              apiClient.checkAchievements().then(r => {
+                if (r.success && r.data?.newlyEarned?.length > 0) {
+                  setTimeout(() => showToast({ message: `Achievement unlocked: ${r.data.newlyEarned.join(', ')}`, type: 'success' }), 2000);
+                }
+              });
             } else {
               showToast({ message: response.error || 'Trade failed', type: 'error' });
             }

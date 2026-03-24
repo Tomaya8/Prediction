@@ -210,6 +210,37 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Get More Credits */}
+        <Text style={styles.sectionTitle}>Get More Credits</Text>
+        <View style={styles.creditPacksRow}>
+          {[
+            { code: 'starter', name: 'Starter', credits: 500, icon: 'flash-outline' },
+            { code: 'pro', name: 'Pro', credits: '2K', icon: 'rocket-outline' },
+            { code: 'whale', name: 'Whale', credits: '10K', icon: 'diamond-outline' },
+          ].map(pack => (
+            <TouchableOpacity
+              key={pack.code}
+              style={styles.creditPackCard}
+              onPress={async () => {
+                Alert.alert('Get Credits', `Add ${pack.credits} credits to your balance?`, [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Get', onPress: async () => {
+                    const res = await apiClient.buyCredits(pack.code);
+                    if (res.success) {
+                      setProfile(prev => prev ? { ...prev, creditBalance: res.data.newBalance } : prev);
+                      Alert.alert('Credits Added!', `+${res.data.creditsAdded} credits. New balance: ${res.data.newBalance}`);
+                    }
+                  }},
+                ]);
+              }}
+            >
+              <Ionicons name={pack.icon as any} size={24} color={Colors.primary} />
+              <Text style={styles.creditPackCredits}>+{pack.credits}</Text>
+              <Text style={styles.creditPackName}>{pack.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {/* Sign Out */}
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
           <Ionicons name="log-out-outline" size={20} color={Colors.danger} />
@@ -441,6 +472,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
+  creditPacksRow: { flexDirection: 'row', paddingHorizontal: Spacing.md, gap: Spacing.sm, marginBottom: Spacing.lg },
+  creditPackCard: { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, padding: Spacing.lg, alignItems: 'center', gap: Spacing.xs, borderWidth: 1, borderColor: Colors.border },
+  creditPackCredits: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.primary },
+  creditPackName: { fontSize: FontSize.xs, color: Colors.textSecondary },
   signOutButton: {
     flexDirection: 'row',
     alignItems: 'center',

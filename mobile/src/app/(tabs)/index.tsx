@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, TextInput, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
 
-import { TrendingMarkets } from '../../lib/components';
+import { TrendingMarkets, showToast } from '../../lib/components';
 import { apiClient, type Market } from '../../lib/api-client';
 import { getStoredUser } from '../../lib/auth';
 
@@ -18,6 +18,10 @@ export default function MarketsScreen() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [markets, setMarkets] = useState<Market[]>([]);
   const [userBalance, setUserBalance] = useState<number | null>(null);
+  const [dailyRewardAvailable, setDailyRewardAvailable] = useState(false);
+  const [currentStreak, setCurrentStreak] = useState(0);
+  const [claimingReward, setClaimingReward] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Fetch markets from API
@@ -50,12 +54,39 @@ export default function MarketsScreen() {
   useEffect(() => {
     fetchMarkets();
     apiClient.getProfile().then(res => {
-      if (res.success && res.data) setUserBalance(res.data.creditBalance);
+      if (res.success && res.data) {
+        setUserBalance(res.data.creditBalance);
+        setCurrentStreak((res.data as any).currentStreak || 0);
+        // Check if daily reward is available (no lastActiveDate or it's from yesterday)
+        setDailyRewardAvailable(true); // Server will reject if already claimed
+        // Show onboarding for new users (0 trades)
+        if ((res.data as any).totalTrades === 0) setShowOnboarding(true);
+      }
     });
   }, [fetchMarkets]);
 
+  const handleClaimDailyReward = async () => {
+    setClaimingReward(true);
+    const res = await apiClient.claimDailyReward();
+    setClaimingReward(false);
+    if (res.success && res.data) {
+      setDailyRewardAvailable(false);
+      setUserBalance(res.data.balance);
+      setCurrentStreak(res.data.streak);
+      showToast({ message: `+${res.data.reward} credits! Streak: ${res.data.streak} days`, type: 'success' });
+    } else {
+      setDailyRewardAvailable(false); // Already claimed
+    }
+  };
+
   const onRefresh = useCallback(() => {
     fetchMarkets(true);
+    apiClient.getProfile().then(res => {
+      if (res.success && res.data) {
+        setUserBalance(res.data.creditBalance);
+        setDailyRewardAvailable(true);
+      }
+    });
   }, [fetchMarkets]);
 
   const formatVolume = (volume: number) => {
@@ -108,6 +139,56 @@ export default function MarketsScreen() {
           <Text style={styles.balanceText}>{userBalance != null ? userBalance.toLocaleString() : '—'}</Text>
         </View>
       </View>
+
+      {/* Daily Reward Banner */}
+      {dailyRewardAvailable && (
+        <TouchableOpacity
+          style={styles.dailyRewardBanner}
+          onPress={handleClaimDailyReward}
+          disabled={claimingReward}
+          activeOpacity={0.8}
+        >
+          <View style={styles.dailyRewardLeft}>
+            <Ionicons name="gift" size={24} color={Colors.warning} />
+            <View style={{ marginLeft: Spacing.sm }}>
+              <Text style={styles.dailyRewardTitle}>Daily Reward Available!</Text>
+              <Text style={styles.dailyRewardSubtitle}>
+                {currentStreak > 0 ? `${currentStreak} day streak` : 'Start your streak'}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.dailyRewardClaim}>
+            <Text style={styles.dailyRewardClaimText}>{claimingReward ? '...' : 'Claim'}</Text>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* Onboarding Card */}
+      {showOnboarding && (
+        <View style={styles.onboardingCard}>
+          <TouchableOpacity style={styles.onboardingClose} onPress={() => setShowOnboarding(false)}>
+            <Ionicons name="close" size={18} color={Colors.textSecondary} />
+          </TouchableOpacity>
+          <Text style={styles.onboardingTitle}>Welcome to Predich!</Text>
+          <Text style={styles.onboardingText}>
+            You have 1,000 credits to start. Browse markets below, pick an outcome, and place your first trade!
+          </Text>
+          <View style={styles.onboardingSteps}>
+            <View style={styles.onboardingStep}>
+              <View style={styles.onboardingStepNum}><Text style={styles.onboardingStepNumText}>1</Text></View>
+              <Text style={styles.onboardingStepText}>Browse a market</Text>
+            </View>
+            <View style={styles.onboardingStep}>
+              <View style={styles.onboardingStepNum}><Text style={styles.onboardingStepNumText}>2</Text></View>
+              <Text style={styles.onboardingStepText}>Pick Yes or No</Text>
+            </View>
+            <View style={styles.onboardingStep}>
+              <View style={styles.onboardingStepNum}><Text style={styles.onboardingStepNumText}>3</Text></View>
+              <Text style={styles.onboardingStepText}>Buy shares & earn</Text>
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -390,6 +471,42 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: FontSize.xs,
   },
+  // Daily Reward
+  dailyRewardBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.warningMuted,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.warning,
+  },
+  dailyRewardLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  dailyRewardTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.textPrimary },
+  dailyRewardSubtitle: { fontSize: FontSize.xs, color: Colors.textSecondary },
+  dailyRewardClaim: { backgroundColor: Colors.warning, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: Radius.sm },
+  dailyRewardClaimText: { color: '#fff', fontWeight: '700', fontSize: FontSize.md },
+  // Onboarding
+  onboardingCard: {
+    backgroundColor: Colors.surface,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  onboardingClose: { position: 'absolute', top: Spacing.sm, right: Spacing.sm, padding: Spacing.xs },
+  onboardingTitle: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.textPrimary, marginBottom: Spacing.sm },
+  onboardingText: { fontSize: FontSize.md, color: Colors.textSecondary, lineHeight: 20, marginBottom: Spacing.lg },
+  onboardingSteps: { gap: Spacing.md },
+  onboardingStep: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  onboardingStepNum: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
+  onboardingStepNumText: { color: '#fff', fontWeight: '700', fontSize: FontSize.sm },
+  onboardingStepText: { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: '500' },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
