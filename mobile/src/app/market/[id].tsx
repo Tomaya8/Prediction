@@ -34,6 +34,7 @@ export default function MarketDetailScreen() {
   const [previewShares, setPreviewShares] = useState<number | null>(null);
   const [previewActualCost, setPreviewActualCost] = useState<number | null>(null);
   const [executingTrade, setExecutingTrade] = useState(false);
+  const [userHoldings, setUserHoldings] = useState<Record<string, number>>({});
 
   // Comments
   const [comments, setComments] = useState<any[]>([]);
@@ -76,12 +77,23 @@ export default function MarketDetailScreen() {
     }
   }, [id]);
 
-  // Fetch user profile for real balance
+  // Fetch user profile for real balance + holdings
   useEffect(() => {
-    apiClient.getProfile().then(res => {
-      if (res.success && res.data) setUserBalance(res.data.creditBalance);
+    apiClient.getProfile().then(async (res) => {
+      if (res.success && res.data) {
+        setUserBalance(res.data.creditBalance);
+        const portfolioRes = await apiClient.getPortfolio(res.data.id);
+        if (portfolioRes.success && portfolioRes.data) {
+          const mId = Array.isArray(id) ? id[0] : id || '';
+          const h: Record<string, number> = {};
+          for (const item of portfolioRes.data as any[]) {
+            if (item.marketId === mId) h[item.outcomeId] = item.quantity || 0;
+          }
+          setUserHoldings(h);
+        }
+      }
     });
-  }, []);
+  }, [id]);
 
   // Live preview: given credits to spend → calculate shares + actual cost
   useEffect(() => {
@@ -169,54 +181,86 @@ export default function MarketDetailScreen() {
       Alert.alert('Error', 'Please select an outcome');
       return;
     }
-    if (!previewShares || previewShares <= 0) {
-      Alert.alert('Error', 'Enter an amount to spend');
-      return;
-    }
 
-    const cost = previewActualCost ?? 0;
     const selectedOutcomeData = market.outcomes.find(o => o.id === selectedOutcome);
+    const mktId = Array.isArray(id) ? id[0] : id || '1';
+    const isBuy = tradeType === 'BUY';
 
-    if (tradeType === 'BUY' && userBalance !== null && cost > userBalance) {
-      Alert.alert('Error', 'Insufficient balance');
-      return;
-    }
+    if (isBuy) {
+      if (!previewShares || previewShares <= 0) {
+        Alert.alert('Error', 'Enter an amount to spend');
+        return;
+      }
+      const cost = previewActualCost ?? 0;
+      if (userBalance !== null && cost > userBalance) {
+        Alert.alert('Error', 'Insufficient balance');
+        return;
+      }
 
-    showConfirm({
-      title: 'Confirm Trade',
-      message: `Buy ${previewShares} shares of "${selectedOutcomeData?.name}" for ${cost} credits?\nMax payout: ${previewShares} credits`,
-      confirmText: 'Buy',
-      onConfirm: async () => {
-        setExecutingTrade(true);
-        try {
-          const mktId = Array.isArray(id) ? id[0] : id || '1';
-          const response = await apiClient.executeTrade({
-            marketId: mktId,
-            outcomeId: selectedOutcome,
-            amount: previewShares,
-          });
-
-          if (response.success && response.data) {
-            const result: TradeResult = response.data;
-            setUserBalance(result.newBalance);
-            setPreviewShares(null);
-            setPreviewActualCost(null);
-            showToast({
-              message: `Bought ${previewShares} shares of ${selectedOutcomeData?.name} for ${result.cost} credits`,
-              type: 'success',
-            });
-            fetchMarketData();
-          } else {
-            showToast({ message: response.error || 'Trade failed', type: 'error' });
+      showConfirm({
+        title: 'Confirm Trade',
+        message: `Buy ${previewShares} shares of "${selectedOutcomeData?.name}" for ${cost} credits?\nMax payout: ${previewShares} credits`,
+        confirmText: 'Buy',
+        onConfirm: async () => {
+          setExecutingTrade(true);
+          try {
+            const response = await apiClient.executeTrade({ marketId: mktId, outcomeId: selectedOutcome, amount: previewShares });
+            if (response.success && response.data) {
+              const result: TradeResult = response.data;
+              setUserBalance(result.newBalance);
+              setUserHoldings(prev => ({ ...prev, [selectedOutcome]: (prev[selectedOutcome] || 0) + previewShares }));
+              setPreviewShares(null);
+              setPreviewActualCost(null);
+              showToast({ message: `Bought ${previewShares} shares of ${selectedOutcomeData?.name}`, type: 'success' });
+              fetchMarketData();
+            } else {
+              showToast({ message: response.error || 'Trade failed', type: 'error' });
+            }
+          } catch (err) {
+            showToast({ message: 'Failed to execute trade.', type: 'error' });
+          } finally {
+            setExecutingTrade(false);
           }
-        } catch (err) {
-          showToast({ message: 'Failed to execute trade. Please try again.', type: 'error' });
-          console.error('Trade error:', err);
-        } finally {
-          setExecutingTrade(false);
-        }
-      },
-    });
+        },
+      });
+    } else {
+      // SELL flow
+      const ownedShares = userHoldings[selectedOutcome] || 0;
+      const sellAmount = parseInt(credits) || 0;
+      if (sellAmount <= 0) {
+        Alert.alert('Error', 'Enter number of shares to sell');
+        return;
+      }
+      if (sellAmount > ownedShares) {
+        Alert.alert('Error', `You only own ${ownedShares} shares of ${selectedOutcomeData?.name}`);
+        return;
+      }
+
+      showConfirm({
+        title: 'Confirm Sell',
+        message: `Sell ${sellAmount} shares of "${selectedOutcomeData?.name}"?`,
+        confirmText: 'Sell',
+        destructive: true,
+        onConfirm: async () => {
+          setExecutingTrade(true);
+          try {
+            const response = await apiClient.sellShares({ marketId: mktId, outcomeId: selectedOutcome, amount: sellAmount });
+            if (response.success && response.data) {
+              setUserBalance(response.data.newBalance);
+              setUserHoldings(prev => ({ ...prev, [selectedOutcome]: Math.max(0, (prev[selectedOutcome] || 0) - sellAmount) }));
+              showToast({ message: `Sold ${sellAmount} shares for ${response.data.revenue} credits`, type: 'success' });
+              fetchMarketData();
+            } else {
+              showToast({ message: response.error || 'Sell failed', type: 'error' });
+            }
+          } catch (err) {
+            showToast({ message: 'Failed to sell shares.', type: 'error' });
+          } finally {
+            setExecutingTrade(false);
+          }
+        },
+      });
+    }
   };
 
   // Show loading state
@@ -325,7 +369,9 @@ export default function MarketDetailScreen() {
           </View>
 
           {/* Amount Input */}
-          <Text style={styles.inputLabel}>Amount to spend (credits)</Text>
+          <Text style={styles.inputLabel}>
+            {tradeType === 'BUY' ? 'Amount to spend (credits)' : `Shares to sell${selectedOutcome ? ` (own: ${userHoldings[selectedOutcome] || 0})` : ''}`}
+          </Text>
           <TextInput
             style={styles.quantityInput}
             value={credits}
@@ -390,7 +436,7 @@ export default function MarketDetailScreen() {
               ? <ActivityIndicator color={Colors.textPrimary} />
               : <Text style={styles.executeButtonText}>
                   {previewShares
-                    ? `${tradeType === 'BUY' ? 'BUY' : 'SELL'} ${previewShares} SHARES`
+                    ? `${tradeType === 'BUY' ? 'BUY' : 'SELL'} ${tradeType === 'BUY' ? previewShares : (parseInt(credits) || 0)} SHARES`
                     : tradeType === 'BUY' ? 'BUY' : 'SELL'}
                 </Text>
             }
@@ -429,6 +475,7 @@ export default function MarketDetailScreen() {
           onAddComment={handleAddComment}
           onLikeComment={handleLikeComment}
         />
+        <View style={{ height: 120 }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

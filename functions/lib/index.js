@@ -266,6 +266,54 @@ exports.api = functions.https.onRequest(async (req, res) => {
             ok(res, result);
             return;
         }
+        if (path === "/trades/sell" && method === "POST") {
+            const user = await auth(req);
+            if (!user) {
+                fail(res, "Auth required", 401);
+                return;
+            }
+            const { marketId, outcomeId, amount } = req.body;
+            if (!marketId || !outcomeId || !amount || amount <= 0) {
+                fail(res, "Missing fields");
+                return;
+            }
+            const marketRef = db.collection("markets").doc(marketId);
+            const userRef = db.collection("users").doc(user.id);
+            const hId = `${user.id}_${marketId}_${outcomeId}`;
+            const hRef = db.collection("holdings").doc(hId);
+            const result = await db.runTransaction(async (tx) => {
+                const mDoc = await tx.get(marketRef);
+                const uDoc = await tx.get(userRef);
+                const hDoc = await tx.get(hRef);
+                if (!mDoc.exists)
+                    throw new Error("Market not found");
+                if (!uDoc.exists)
+                    throw new Error("User not found");
+                if (!hDoc.exists || (hDoc.data().quantity || 0) < amount)
+                    throw new Error(`Insufficient shares. You own ${hDoc.exists ? hDoc.data().quantity : 0}`);
+                const mD = mDoc.data();
+                const uD = uDoc.data();
+                const hD = hDoc.data();
+                const b = mD.liquidityParameter || 1000;
+                const oc = parseOutcomes(mD, mDoc.id);
+                const revenue = Math.max(0, Math.round(-buyCost(oc, b, outcomeId, -amount)));
+                const updated = oc.map((o) => o.id === outcomeId ? { ...o, quantity: o.quantity - amount } : o);
+                tx.update(marketRef, { outcomes: updated, totalVolume: (mD.totalVolume || 0) + revenue });
+                tx.update(userRef, { creditBalance: uD.creditBalance + revenue, totalCreditsEarned: (uD.totalCreditsEarned || 0) + revenue, totalTrades: (uD.totalTrades || 0) + 1 });
+                const newQty = hD.quantity - amount;
+                if (newQty <= 0) {
+                    tx.delete(hRef);
+                }
+                else {
+                    tx.update(hRef, { quantity: newQty });
+                }
+                tx.set(db.collection("trades").doc(), { userId: user.id, marketId, outcomeId, type: "SELL", quantity: amount, totalCost: revenue, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+                tx.set(db.collection("transactions").doc(), { userId: user.id, amount: revenue, type: "TRADE_SELL", description: `Sold ${amount} shares`, referenceId: marketId, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+                return { revenue, newBalance: uD.creditBalance + revenue, prices: prices(updated, b), shares: amount };
+            });
+            ok(res, result);
+            return;
+        }
         if (path.match(/^\/trades\/portfolio\/[^/]+$/) && method === "GET") {
             const userId = path.split("/")[3];
             const snap = await db.collection("holdings").where("userId", "==", userId).get();

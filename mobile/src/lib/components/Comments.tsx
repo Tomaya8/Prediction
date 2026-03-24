@@ -135,6 +135,11 @@ export const Comments: React.FC<CommentsProps> = ({
           value={newComment}
           onChangeText={setNewComment}
           multiline
+          scrollEnabled={false}
+          onFocus={() => {
+            // Small delay to let keyboard appear, then parent ScrollView will adjust
+            setTimeout(() => {}, 300);
+          }}
         />
         <TouchableOpacity
           style={[
