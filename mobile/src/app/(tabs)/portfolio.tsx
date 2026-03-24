@@ -4,6 +4,7 @@ import {
   ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
 import { apiClient } from '../../lib/api-client';
 import { getStoredUser } from '../../lib/auth';
@@ -32,6 +33,7 @@ function fmtPnl(value: number): string {
 }
 
 export default function PortfolioScreen() {
+  const router = useRouter();
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -132,7 +134,7 @@ export default function PortfolioScreen() {
           </View>
         ) : (
           activeHoldings.map(holding => (
-            <View key={holding.id} style={styles.holdingCard}>
+            <TouchableOpacity key={holding.id} style={styles.holdingCard} onPress={() => router.push(`/market/${holding.marketId}`)} activeOpacity={0.7}>
               <View style={styles.holdingHeader}>
                 <Text style={styles.holdingMarket} numberOfLines={2}>{holding.marketTitle}</Text>
                 <View style={styles.outcomeBadge}>
@@ -164,7 +166,7 @@ export default function PortfolioScreen() {
                   </Text>
                 </View>
               </View>
-            </View>
+            </TouchableOpacity>
           ))
         )}
 

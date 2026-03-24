@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
 import { Comments, showToast, showConfirm } from '../../lib/components';
@@ -242,8 +242,8 @@ export default function MarketDetailScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.content}>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
+      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
         {/* Market Header */}
         <View style={styles.header}>
           <View style={styles.categoryBadge}>
@@ -430,7 +430,7 @@ export default function MarketDetailScreen() {
           onLikeComment={handleLikeComment}
         />
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
