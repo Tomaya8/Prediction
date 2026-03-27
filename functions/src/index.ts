@@ -741,3 +741,76 @@ export const api = functions.https.onRequest(async (req, res) => {
   }
 });
 // v1.2.0
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Scheduled sync — runs daily at 6 AM UTC
+// ═══════════════════════════════════════════════════════════════════════════════
+export const dailyMarketSync = functions.pubsub.schedule("every day 06:00").onRun(async () => {
+  console.log("Daily market sync started");
+  let created = 0, skipped = 0;
+
+  // Get or create bot user
+  let botSnap = await db.collection("users").where("email", "==", "bot@predich.system").limit(1).get();
+  let botId: string;
+  if (botSnap.empty) {
+    const ref = db.collection("users").doc();
+    await ref.set({ email: "bot@predich.system", displayName: "Predich Team", creditBalance: 0, totalTrades: 0, winningTrades: 0, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+    botId = ref.id;
+  } else {
+    botId = botSnap.docs[0].id;
+  }
+
+  // Dedup
+  const existing = new Set<string>();
+  (await db.collection("markets").select("title").get()).docs.forEach(d => existing.add((d.data().title || "").toLowerCase()));
+  (await db.collection("proposals").select("title").get()).docs.forEach(d => existing.add((d.data().title || "").toLowerCase()));
+
+  // Polymarket
+  try {
+    const r = await fetch("https://gamma-api.polymarket.com/markets?limit=30&active=true&closed=false&order=volume24hr&ascending=false");
+    if (r.ok) {
+      const markets = await r.json();
+      for (const m of markets) {
+        const title = (m.question || "").trim();
+        if (!title || existing.has(title.toLowerCase())) { skipped++; continue; }
+        existing.add(title.toLowerCase());
+        const catMap: Record<string, string> = { Politics: "POLITICS", Sports: "SPORTS", Crypto: "CRYPTO", "Pop Culture": "ENTERTAINMENT", Science: "SCIENCE", Tech: "TECHNOLOGY", Business: "BUSINESS" };
+        const category = (m.category && catMap[m.category]) || "OTHER";
+        let outcomes = ["Yes", "No"];
+        try { outcomes = m.outcomes ? JSON.parse(m.outcomes) : outcomes; } catch {}
+        await db.collection("proposals").add({
+          title, description: (m.description || "").slice(0, 500) || null,
+          category, outcomes, suggestedExpiry: m.endDate || "",
+          resolutionCriteria: "Source: Polymarket", status: "PENDING", upvotes: 0,
+          createdById: botId, createdBy: { id: botId, displayName: "Predich Team" },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        created++;
+      }
+    }
+  } catch (e: any) { console.error("Polymarket error:", e.message); }
+
+  // Manifold
+  try {
+    const r = await fetch("https://api.manifold.markets/v0/markets?limit=20&sort=score");
+    if (r.ok) {
+      const markets = await r.json();
+      for (const m of markets) {
+        const title = (m.question || "").trim();
+        if (!title || existing.has(title.toLowerCase())) { skipped++; continue; }
+        existing.add(title.toLowerCase());
+        await db.collection("proposals").add({
+          title, description: null, category: "OTHER", outcomes: ["Yes", "No"],
+          suggestedExpiry: m.closeTime ? new Date(m.closeTime).toISOString() : "",
+          resolutionCriteria: "Source: Manifold Markets", status: "PENDING", upvotes: 0,
+          createdById: botId, createdBy: { id: botId, displayName: "Predich Team" },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        created++;
+      }
+    }
+  } catch (e: any) { console.error("Manifold error:", e.message); }
+
+  console.log(`Daily sync done: ${created} created, ${skipped} skipped`);
+  return null;
+});
