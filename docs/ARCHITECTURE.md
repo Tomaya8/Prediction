@@ -1,193 +1,240 @@
-# PredictSpinz - Virtual Credit Prediction Market
+# Predich — System Architecture
 
-## System Architecture
+## Overview
 
-### Overview
-PredictSpinz is a virtual credit prediction market application that allows users to trade on the outcome of real-world events using in-app credits. The system uses an Automated Market Maker (AMM) based on the Logarithmic Market Scoring Rule (LMSR) for price discovery.
+Predich is a virtual credit prediction market and tournament app. Users trade on real-world event outcomes using in-app credits (LMSR-based markets) and compete in numeric prediction tournaments where the closest guess wins multiplied payouts.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              CLIENT LAYER                                    │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐   │
-│  │  Dashboard  │  │ Market Page │  │  Portfolio  │  │ Leaderboard    │   │
-│  │    View     │  │    View     │  │    View     │  │     View       │   │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └───────┬────────┘   │
-└─────────┼────────────────┼────────────────┼─────────────────┼─────────────┘
-          │                │                │                 │
-          ▼                ▼                ▼                 ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           API GATEWAY (Express/NestJS)                       │
-│  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │  REST Endpoints + WebSocket for Real-time Updates                    │   │
-│  └──────────────────────────────────────────────────────────────────────┘   │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
+│  │  Markets     │  │  Trading     │  │  Tournaments │  │  Profile     │   │
+│  │  (Browse)    │  │  (Buy/Sell)  │  │  (Predict)   │  │  (Stats)     │   │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘   │
+│         └──────────────────┴─────────────────┴─────────────────┘           │
+│                     React Native (Expo SDK 52)                              │
 └─────────────────────────────────────────────────────────────────────────────┘
           │
           ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          BUSINESS LOGIC LAYER                                │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐   │
-│  │   Market    │  │    Trade    │  │   Credit    │  │   Leaderboard   │   │
-│  │   Service   │  │   Service   │  │   Service   │  │    Service      │   │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └───────┬────────┘   │
-│         │                │                │                 │             │
-│         ▼                ▼                ▼                 ▼             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │              LMSR Pricing Engine (AMM)                              │   │
-│  │  price_i = exp(q_i / b) / Σexp(q_j / b)                            │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
+│                      Firebase Cloud Functions (Node.js 22)                    │
+│  ┌─────────┐ ┌─────────┐ ┌────────────┐ ┌──────────────┐ ┌────────────┐  │
+│  │  Auth   │ │ Markets │ │  Trading   │ │ Tournaments  │ │   Admin    │  │
+│  │  (JWT)  │ │ (CRUD)  │ │  (LMSR)   │ │  V2 (Numeric)│ │  (Manage)  │  │
+│  └─────────┘ └─────────┘ └────────────┘ └──────────────┘ └────────────┘  │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │              Scheduled Functions                                      │  │
+│  │  dailyMarketSync | autoResolveMarkets | tournamentScheduler          │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────┘
           │
           ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                            DATA LAYER                                        │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐   │
-│  │  PostgreSQL │  │    Redis    │  │  Firebase   │  │   External      │   │
-│  │  (Primary)  │  │  (Cache)    │  │  (Auth)     │  │   APIs          │   │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────────┘   │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
+│  │  Firestore   │  │  Firebase    │  │  CoinGecko   │  │  ExchangeRate│   │
+│  │  (Primary)   │  │  Auth (Admin)│  │  (Crypto)    │  │  API (Forex) │   │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Component Responsibilities
+---
 
-#### 1. API Gateway
-- Handle HTTP requests (REST)
-- WebSocket connections for real-time price updates
-- Rate limiting and authentication
-- Request validation
+## Technology Stack (Actual)
 
-#### 2. Market Service
-- CRUD operations for markets
-- Market categorization (politics, sports, crypto, entertainment)
-- Market resolution logic
-- Price calculation coordination
+### Mobile App
+| Layer | Technology | Version |
+|-------|-----------|---------|
+| Framework | React Native | 0.76.6 |
+| Build Tool | Expo | 52.0.0 |
+| Router | Expo Router | 4.0.0 |
+| State Management | Zustand | 5.0.0 |
+| Auth | Custom JWT + SecureStore | — |
+| IAP | RevenueCat (react-native-purchases) | — |
+| Notifications | expo-notifications | — |
+| Language | TypeScript | 5.3.0 |
 
-#### 3. Trade Service
-- Execute buy/sell orders
-- Validate user balance
-- Update holdings
-- Record transaction history
+### Backend (Production)
+| Layer | Technology | Version |
+|-------|-----------|---------|
+| Compute | Firebase Cloud Functions | Node.js 22 |
+| Database | Cloud Firestore | — |
+| Auth | JWT + bcrypt | jsonwebtoken 9.0.0 |
+| Validation | Zod | 4.x |
+| Rate Limiting | Firestore-backed (per IP) | — |
 
-#### 4. Credit Service
-- Manage user credit balances
-- Process daily/weekly rewards
-- Handle credit purchases (non-withdrawable)
-- Track transaction history
+### Admin Dashboard
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 14 |
+| Styling | Tailwind CSS |
+| Hosting | Firebase Hosting (predich-admin.web.app) |
 
-#### 5. Leaderboard Service
-- Calculate rankings by credits and ROI
-- Track user achievements
-- Manage streaks and badges
-
-#### 6. LMSR Pricing Engine
-- Maintain liquidity parameter (b)
-- Calculate outcome prices dynamically
-- Handle buy/sell cost calculations
+### External APIs
+| Service | Purpose |
+|---------|---------|
+| CoinGecko | Crypto prices (BTC, ETH, SOL) — free |
+| ExchangeRate API | Forex rates (EUR/USD, etc.) — free |
+| Polymarket API | Market scraping for proposals |
+| Manifold Markets API | Market scraping for proposals |
+| Expo Push API | Push notifications — free |
 
 ---
 
-## Technology Stack
+## Firestore Collections
 
-### Frontend
-- **Framework**: React / Next.js
-- **State Management**: Zustand / React Query
-- **Real-time**: WebSocket client
-- **Styling**: Tailwind CSS
-- **Charts**: Recharts / TradingView
-
-### Backend
-- **Runtime**: Node.js with TypeScript
-- **Framework**: Express.js or NestJS
-- **Database**: PostgreSQL with Prisma ORM
-- **Caching**: Redis
-- **Authentication**: Firebase Auth
-- **Real-time**: Socket.io
-
-### Infrastructure
-- **Hosting**: Vercel (frontend) / Railway/Render (backend)
-- **Database**: Neon / Supabase (PostgreSQL)
-- **Cache**: Upstash (Redis)
+| Collection | Purpose |
+|-----------|---------|
+| `users` | Profiles, balances, stats, auth, push tokens |
+| `markets` | LMSR prediction markets with outcomes |
+| `holdings` | User share positions per market |
+| `trades` | Trade history (buy/sell) |
+| `transactions` | Full credit ledger |
+| `price_history` | Market price snapshots (time-series) |
+| `comments` | Market discussion threads |
+| `follows` | Social follow relationships |
+| `proposals` | User/bot-submitted market proposals |
+| `tournament_v2` | Numeric prediction tournaments |
+| `tournament_entries` | User predictions per tournament |
+| `tournament_templates` | Auto-creation templates |
+| `rate_limits` | Firestore-backed rate limiting |
+| `user_achievements` | Earned achievement records |
 
 ---
 
-## Data Flow
+## Cloud Functions
 
-### Placing a Trade
+### API (`api`)
+Single HTTP function handling all REST endpoints. Routes:
+- `/auth/*` — Register, login, Firebase token exchange
+- `/markets/*` — List, detail, trending, price history, comments
+- `/trades/*` — Preview, execute, sell, portfolio
+- `/users/*` — Profile, transactions, daily reward, ad reward, achievements, search, credit packs, account deletion
+- `/leaderboard` — Global rankings
+- `/social/*` — Friends, follow/unfollow, referrals, challenges
+- `/proposals/*` — Submit, list, vote
+- `/tournaments` — Legacy tournament list
+- `/tournaments-v2/*` — Numeric prediction tournaments (list, detail, enter, edit, tracker, results)
+- `/admin/*` — Tournament templates, manual resolve/cancel, user management, market sync
+
+### Scheduled Functions
+| Function | Schedule | Purpose |
+|----------|----------|---------|
+| `dailyMarketSync` | Daily 6 AM UTC | Scrapes Polymarket + Manifold for new market proposals |
+| `autoResolveMarkets` | Every 6 hours | Flags/cancels expired LMSR markets, refunds holders |
+| `tournamentScheduler` | Every 15 minutes | Auto-creates tournaments from templates, updates live prices, transitions statuses, auto-resolves expired tournaments, sends push notifications |
+
+### Triggers
+| Function | Trigger | Purpose |
+|----------|---------|---------|
+| `processReferral` | Firestore `users/{userId}` onCreate | Grants 500 credits to both referrer and new user |
+
+---
+
+## Two Market Systems
+
+### 1. LMSR Prediction Markets (Original)
+- Binary/multi-outcome markets: "Will X happen?"
+- AMM pricing: `price_i = exp(q_i / b) / Σexp(q_j / b)`
+- Users buy/sell shares, prices move dynamically
+- Admin-resolved or auto-cancelled after expiry
+
+### 2. Numeric Prediction Tournaments (V2)
+- Users predict a specific number: "What will BTC price be on April 8?"
+- Entry fee → prize pool (house takes 15-20% rake)
+- Closest guess wins, ranked by `|prediction - actual|`
+- Multiplied payouts: up to 10x for Rapid, 5x Weekly, 2x Monthly
+- Auto-resolved via external APIs (CoinGecko, ExchangeRate)
+
+### Tournament Lifecycle
 ```
-1. User selects outcome and enters amount
-2. Frontend validates input and checks balance
-3. API receives trade request
-4. Trade Service validates:
-   - User has sufficient credits
-   - Market is active
-   - Market hasn't expired
-5. LMSR Engine calculates cost:
-   - cost = b * ln(Σexp(q_i/b)) - b * ln(Σexp((q_i + delta)/b))
-6. Deduct credits from user balance
-7. Update holdings (add shares)
-8. Update market quantities (q_i)
-9. Record trade in history
-10. Emit WebSocket event for price update
-11. Return updated portfolio to user
+REGISTRATION (open for entries)
+  │ Users submit numeric predictions + pay entry fee
+  │ Can edit prediction during this phase
+  ▼
+LOCKED (no new entries, no edits)
+  │ Live tracker shows estimated rank
+  │ Scheduler updates live prices every 15 min
+  ▼
+RESOLVED (auto or manual)
+  │ Actual value fetched from API
+  │ Rankings calculated by distance
+  │ Prizes distributed to top players
+  │ Push notifications sent
+  ▼
+Next tournament auto-created from same template
 ```
 
-### Market Resolution
-```
-1. Admin/oracle submits resolution
-2. Validate resolution authority
-3. Mark market as resolved
-4. Calculate winnings:
-   - winning_shares * 1 credit per share
-5. Credit winnings to winning holders
-6. Update user performance stats
-7. Update leaderboard
-8. Emit resolution event
-```
+### Tournament Types
+| Type | Duration | Registration | Entry Fee | Max Multiplier | Rake |
+|------|----------|-------------|-----------|----------------|------|
+| Monthly | 30 days | First 7 days | 50 credits | 2x | 15% |
+| Weekly | 7 days | First 2 days | 75-100 credits | 5x | 15% |
+| Rapid | 2 hours | First 30 min | 25 credits | 10x | 20% |
 
 ---
 
-## Security & Compliance
+## Security
 
-### Safety Measures
-1. **Disclaimer Banner**: "This is not gambling. Credits have no real-world value."
-2. **No Withdrawal**: Credits cannot be converted to real money
-3. **Purchase Limits**: Optional daily/weekly credit purchase caps
-4. **Bot Detection**: Rate limiting and CAPTCHA on sensitive endpoints
-5. **Age Verification**: Minimum age requirement (13+)
-6. **Session Management**: JWT tokens with short expiry
-
-### Anti-Abuse
-- Rate limiting: 100 requests/minute per IP
-- Trade size limits per market
-- Daily trade limits
-- Suspicious activity monitoring
+- **CORS**: Locked to specific origins (admin domain, app hosting, localhost)
+- **Rate Limiting**: Firestore-backed, survives function instance restarts. Auth: 10/min, General: 100/min
+- **Input Validation**: Zod schemas on all mutation endpoints
+- **Auth**: JWT with 30-day expiry, bcrypt password hashing
+- **Account Deletion**: Full data wipe across all collections (App Store compliant)
+- **Firestore Rules**: Client access denied on sensitive collections (rate_limits)
 
 ---
 
-## Monetization Strategy
+## Monetization
 
-### Credit Packs (Primary)
-- Starter Pack: 1,000 credits - $0.99
-- Pro Pack: 5,000 credits - $4.99
-- VIP Pack: 25,000 credits - $19.99
-- Whale Pack: 100,000 credits - $49.99
+| Revenue Stream | Status | Details |
+|---------------|--------|---------|
+| Tournament rake | Live | 15-20% of entry fees retained |
+| Credit packs (IAP) | Configured | RevenueCat SDK integrated, products in dashboard |
+| Premium subscription | Configured | "Predich Pro" entitlement, monthly/yearly/lifetime |
+| Rewarded video ads | Stubbed | AdMob SDK removed pending app IDs |
+| Daily rewards | Live | 25 + streak bonus (max 75/day, 2x for Pro) |
 
-### Premium Subscription
-- Analytics Pro: $9.99/month
-  - Advanced portfolio analytics
-  - Historical performance charts
-  - Early access to new markets
-  - Custom alerts
+### Credit Economy
+| Source | Credits/day (free user) |
+|--------|------------------------|
+| Daily reward | 25-75 |
+| Referral bonus | 500 (one-time) |
+| Starting bonus | 1,000 (one-time) |
 
-### Ads (Optional)
-- Banner ads on dashboard
-- Interstitial ads between trades
+| Sink | Credits |
+|------|---------|
+| Market trades | Variable (LMSR pricing) |
+| Tournament entries | 25-100 per tournament |
+| Market proposals | 50 per proposal (free for Pro) |
 
 ---
 
-## Scalability Considerations
+## Deployment
 
-1. **Database Indexing**: Index on user_id, market_id, created_at
-2. **Caching**: Cache market prices in Redis (TTL: 5 seconds)
-3. **WebSocket Rooms**: Subscribe users to specific market rooms only
-4. **Batch Processing**: Aggregate price updates every 100ms
-5. **Read Replicas**: Separate read/write database connections
+| Component | Hosting | URL |
+|-----------|---------|-----|
+| Mobile App | Expo / TestFlight | — |
+| API | Firebase Cloud Functions | us-central1-prediction-app-2026.cloudfunctions.net/api |
+| Admin Dashboard | Firebase Hosting | predich-admin.web.app |
+| Database | Cloud Firestore | prediction-app-2026 |
+
+---
+
+## Mobile App Screens (13)
+
+| Screen | Tab | Description |
+|--------|-----|-------------|
+| Markets | Bottom tab | Browse, search, filter by category, tournament banner |
+| Portfolio | Bottom tab | Active/resolved holdings, P&L |
+| Rankings | Bottom tab | Global leaderboard, follow users |
+| Profile | Bottom tab | Stats, streaks, store link |
+| Market Detail | Stack | Price chart, buy/sell, comments |
+| Tournaments | Hamburger | V2 tournament list (Rapid/Weekly/Monthly) + entry/tracker/results modals |
+| Friends | Hamburger | Friends list, challenges, referral code |
+| Transactions | Hamburger | Credit history |
+| Achievements | Hamburger | Badges |
+| Create Market | Hamburger | Propose new markets (50 credit fee) |
+| Credit Store | Hamburger | IAP packs, RevenueCat paywall, ad rewards |
+| Settings | Hamburger | Dark mode (reactive), notifications, account deletion |
+| Auth | Stack | Sign in / sign up with referral code |

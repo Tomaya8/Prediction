@@ -3,13 +3,14 @@ import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable } from 'reac
 import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../lib/colors';
+import { useStyles } from '../../lib/useStyles';
 import { getStoredUser, signOut, type AuthUser } from '../../lib/auth';
 import { apiClient } from '../../lib/api-client';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 // ─── Hamburger button ────────────────────────────────────────────────────────
-function HamburgerIcon({ onPress }: { onPress: () => void }) {
+function HamburgerIcon({ onPress, styles }: { onPress: () => void; styles: ReturnType<typeof createStyles> }) {
   return (
     <TouchableOpacity onPress={onPress} style={styles.hamburgerButton}>
       <Ionicons name="menu-outline" size={26} color={Colors.headerText} />
@@ -23,11 +24,13 @@ function MenuItem({
   title,
   onPress,
   danger,
+  styles,
 }: {
   icon: IoniconsName;
   title: string;
   onPress: () => void;
   danger?: boolean;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <TouchableOpacity style={styles.menuItem} onPress={onPress}>
@@ -70,6 +73,7 @@ function TabIcon({
 
 // ─── Main layout ─────────────────────────────────────────────────────────────
 export default function TabLayout() {
+  const styles = useStyles(createStyles);
   const router = useRouter();
   const [menuVisible, setMenuVisible] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -93,6 +97,7 @@ export default function TabLayout() {
     { icon: 'receipt-outline',    title: 'Transaction History',    href: '/(tabs)/transactions' },
     { icon: 'ribbon-outline',     title: 'Achievements',           href: '/(tabs)/achievements' },
     { icon: 'bulb-outline',       title: 'Propose Market',         href: '/(tabs)/create-market' },
+    { icon: 'cart-outline',       title: 'Credit Store',           href: '/(tabs)/store' },
     { icon: 'settings-outline',   title: 'Settings',               href: '/(tabs)/settings' },
   ];
 
@@ -125,7 +130,7 @@ export default function TabLayout() {
           headerStyle: { backgroundColor: Colors.headerBg },
           headerTintColor: Colors.headerText,
           headerTitleStyle: { fontWeight: 'bold' },
-          headerLeft: () => <HamburgerIcon onPress={() => setMenuVisible(true)} />,
+          headerLeft: () => <HamburgerIcon onPress={() => setMenuVisible(true)} styles={styles} />,
         }}
       >
         {/* ── Visible bottom tabs ── */}
@@ -168,6 +173,7 @@ export default function TabLayout() {
         <Tabs.Screen name="transactions"  options={{ href: null }} />
         <Tabs.Screen name="achievements"  options={{ href: null }} />
         <Tabs.Screen name="create-market" options={{ href: null }} />
+        <Tabs.Screen name="store"         options={{ href: null, headerTitle: 'Credit Store' }} />
         <Tabs.Screen name="settings"      options={{ href: null }} />
       </Tabs>
 
@@ -209,6 +215,7 @@ export default function TabLayout() {
                   key={i}
                   icon={item.icon}
                   title={item.title}
+                  styles={styles}
                   onPress={() => {
                     closeMenu();
                     router.push(item.href as any);
@@ -224,6 +231,7 @@ export default function TabLayout() {
                 title="Sign Out"
                 onPress={handleSignOut}
                 danger
+                styles={styles}
               />
               <Text style={styles.disclaimer}>
                 Credits have no real-world value.{'\n'}This is not gambling.
@@ -236,7 +244,7 @@ export default function TabLayout() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() { return StyleSheet.create({
   hamburgerButton: {
     padding: 10,
     marginLeft: 6,
@@ -341,4 +349,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 8,
   },
-});
+}); }

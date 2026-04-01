@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Linking, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, FontSize, setThemeMode, getThemeMode } from '../../lib/colors';
+import { useStyles } from '../../lib/useStyles';
 import { signOut } from '../../lib/auth';
 import { apiClient } from '../../lib/api-client';
 
@@ -17,6 +18,7 @@ interface SettingItem {
 }
 
 export default function SettingsScreen() {
+  const styles = useStyles(createStyles);
   const router = useRouter();
   const [notifications, setNotifications] = React.useState(true);
   const [soundEffects, setSoundEffects] = React.useState(true);
@@ -26,7 +28,6 @@ export default function SettingsScreen() {
   const handleDarkModeToggle = (value: boolean) => {
     setDarkMode(value);
     setThemeMode(value ? 'dark' : 'light');
-    Alert.alert('Theme Changed', 'Please close and reopen the app to see the full theme change.');
   };
 
   const handleSignOut = () => {
@@ -48,6 +49,26 @@ export default function SettingsScreen() {
     );
   };
 
+  const [deleting, setDeleting] = React.useState(false);
+
+  const executeDeleteAccount = async (password?: string) => {
+    setDeleting(true);
+    try {
+      const result = await apiClient.deleteAccount(password);
+      if (!result.success) {
+        Alert.alert('Error', result.error || 'Failed to delete account.');
+        setDeleting(false);
+        return;
+      }
+      await signOut();
+      apiClient.setAuthToken(null);
+      router.replace('/auth');
+    } catch {
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+      setDeleting(false);
+    }
+  };
+
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account',
@@ -58,7 +79,27 @@ export default function SettingsScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            Alert.alert('Not Available', 'Account deletion is not yet available. Please contact support.');
+            // On iOS we can use Alert.prompt for password, on Android use a second confirmation
+            if (Platform.OS === 'ios') {
+              Alert.prompt(
+                'Confirm Deletion',
+                'Enter your password to confirm account deletion.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete Forever', style: 'destructive', onPress: (pw) => executeDeleteAccount(pw) },
+                ],
+                'secure-text'
+              );
+            } else {
+              Alert.alert(
+                'Final Confirmation',
+                'Are you absolutely sure? All your credits, trades, and history will be permanently deleted.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete Forever', style: 'destructive', onPress: () => executeDeleteAccount() },
+                ]
+              );
+            }
           },
         },
       ]
@@ -245,7 +286,7 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() { return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -344,4 +385,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-});
+}); }

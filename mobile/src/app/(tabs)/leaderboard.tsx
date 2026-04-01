@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
+import { useStyles } from '../../lib/useStyles';
 import { apiClient } from '../../lib/api-client';
 import { showToast } from '../../lib/components';
 
@@ -22,6 +23,7 @@ interface LeaderboardEntry {
 type ScoreType = 'credits' | 'roi';
 
 export default function LeaderboardScreen() {
+  const styles = useStyles(createStyles);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -239,7 +241,7 @@ export default function LeaderboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() { return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -416,4 +418,4 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: FontSize.xs,
   },
-});
+}); }

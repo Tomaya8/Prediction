@@ -290,7 +290,7 @@ class ApiClient {
     return this.request(`/leaderboard?type=${type}`);
   }
 
-  // ============ TOURNAMENTS ============
+  // ============ TOURNAMENTS (legacy) ============
 
   async getTournaments(status?: string): Promise<ApiResponse<any[]>> {
     const q = status ? `?status=${status}` : '';
@@ -303,6 +303,36 @@ class ApiClient {
 
   async getTournamentLeaderboard(id: string): Promise<ApiResponse<any[]>> {
     return this.request(`/tournaments/${id}/leaderboard`);
+  }
+
+  // ============ TOURNAMENTS V2 (numeric prediction) ============
+
+  async getTournamentsV2(): Promise<ApiResponse<{ tournaments: any[]; myEntries: Record<string, any> }>> {
+    return this.request('/tournaments-v2');
+  }
+
+  async getTournamentV2(id: string): Promise<ApiResponse<{ tournament: any; myEntry: any; distribution: any[] }>> {
+    return this.request(`/tournaments-v2/${id}`);
+  }
+
+  async enterTournament(id: string, prediction: number): Promise<ApiResponse<any>> {
+    return this.request(`/tournaments-v2/${id}/enter`, { method: 'POST', body: JSON.stringify({ prediction }) });
+  }
+
+  async editTournamentPrediction(id: string, prediction: number): Promise<ApiResponse<any>> {
+    return this.request(`/tournaments-v2/${id}/edit`, { method: 'PUT', body: JSON.stringify({ prediction }) });
+  }
+
+  async getTournamentTracker(id: string): Promise<ApiResponse<any>> {
+    return this.request(`/tournaments-v2/${id}/tracker`);
+  }
+
+  async getTournamentResults(id: string): Promise<ApiResponse<any>> {
+    return this.request(`/tournaments-v2/${id}/results`);
+  }
+
+  async getRecentTournaments(): Promise<ApiResponse<any[]>> {
+    return this.request('/tournaments-v2/recent');
   }
 
   // ============ SOCIAL / FRIENDS ============
@@ -374,6 +404,10 @@ class ApiClient {
     return this.request('/users/me/daily-reward', { method: 'POST' });
   }
 
+  async claimAdReward(): Promise<ApiResponse<{ credits: number; adsRemaining: number; newBalance: number }>> {
+    return this.request('/users/me/ad-reward', { method: 'POST' });
+  }
+
   // ============ PROPOSALS ============
 
   async submitProposal(params: {
@@ -417,6 +451,13 @@ class ApiClient {
   async getTransactions(type?: string): Promise<ApiResponse<any[]>> {
     const q = type ? `?type=${type}` : '';
     return this.request(`/users/me/transactions${q}`);
+  }
+
+  async deleteAccount(password?: string): Promise<ApiResponse<{ message: string }>> {
+    return this.request('/users/me', {
+      method: 'DELETE',
+      body: JSON.stringify({ password }),
+    });
   }
 
   async getAchievements(): Promise<ApiResponse<any[]>> {

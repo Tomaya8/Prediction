@@ -1,496 +1,308 @@
-# User Flows & UI Wireframes
+# User Flows
 
-## Table of Contents
-1. [Example User Flows](#example-user-flows)
-2. [UI Wireframe Descriptions](#ui-wireframe-descriptions)
-3. [API Design Summary](#api-design-summary)
-
----
-
-## Example User Flows
-
-### Flow 1: New User Registration & First Trade
+## 1. New User Registration
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         NEW USER JOURNEY                                     │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-1. APP LAUNCH
-   │
-   ├─── Show Safety Disclaimer Modal
-   │   └─── "⚠️ Credits have no real-world value. Not gambling."
-   │   └─── User clicks "I Understand"
-   │
-   ├─── Sign In / Sign Up Screen
-   │   ├─── Option 1: Continue with Google
-   │   ├─── Option 2: Continue with Apple
-   │   └─── Option 3: Continue with Email
-   │
-   ├─── Create Account (if email)
-   │   ├─── Enter email
-   │   ├─── Create username
-   │   └─── Accept Terms & Conditions
-   │
-   └─── Account Created Successfully!
-       └─── Award: 1,000 STARTING CREDITS 🎉
-       └─── Award: "First Steps" Achievement 🎖️
-```
-
-```
-2. DASHBOARD (First View)
-   ┌─────────────────────────────────────────────┐
-   │  PredictSpinz                    👤 1,000 🔶 │
-   ├─────────────────────────────────────────────┤
-   │                                                 │
-   │  📈 Trending Markets                          │
-   │  ┌─────────────────────────────────────────┐  │
-   │  │ Will Bitcoin exceed $100k by Dec 2024? │  │
-   │  │ Yes 65%    No 35%           2.5K vol   │  │
-   │  └─────────────────────────────────────────┘  │
-   │  ┌─────────────────────────────────────────┐  │
-   │  │ Will Trump win 2024 election?          │  │
-   │  │ Yes 52%    No 48%           5.2K vol   │  │
-   │  └─────────────────────────────────────────┘  │
-   │                                                 │
-   │  📊 Your Portfolio                    See All  │
-   │  You haven't made any trades yet               │
-   │                                                 │
-   │  🏆 Leaderboard                      See All   │
-   │  #1: CryptoKing    #2: PoliticalPundit       │
-   │                                                 │
-   └─────────────────────────────────────────────┘
-
-   Tab Bar: 🏠 Markets  📊 Portfolio  🏆 Leaderboard  👤 Profile
-```
-
-```
-3. PLACING A TRADE
-
-   User taps on "Will Bitcoin exceed $100k..." market
-
-   ┌─────────────────────────────────────────────┐
-   │  ← Will Bitcoin exceed $100k by Dec 2024?  │
-   │                                             │
-   │  📊 Probability: 65% Yes / 35% No          │
-   │  ⏱️ Expires: Dec 31, 2024                  │
-   │  💰 Volume: 2,500 credits                  │
-   │                                             │
-   ├─────────────────────────────────────────────┤
-   │  💳 Your Balance: 1,000 credits            │
-   │                                             │
-   │  Select Outcome:                            │
-   │  ┌─────────────┐  ┌─────────────┐          │
-   │  │   ✅ YES    │  │   ❌ NO     │          │
-   │  │    65%      │  │    35%      │          │
-   │  └─────────────┘  └─────────────┘          │
-   │                                             │
-   │  Quantity:                                  │
-   │  ┌─────────────────────────────┐            │
-   │  │         100                 │            │
-   │  └─────────────────────────────┘            │
-   │  Quick: 10 | 50 | 100 | 500                │
-   │                                             │
-   │  Cost: 65.00 credits                       │
-   │  After trade: 935.00 credits               │
-   │                                             │
-   │  ┌─────────────────────────────────────┐    │
-   │  │         BUY 100 SHARES              │    │
-   │  └─────────────────────────────────────┘    │
-   │                                             │
-   │  ⚠️ Credits have no real-world value       │
-   └─────────────────────────────────────────────┘
-
-   User taps "BUY 100 SHARES"
-
-   ┌─────────────────────────────────────────────┐
-   │           ✅ Trade Successful!               │
-   │                                             │
-   │  You bought 100 shares of YES               │
-   │  Cost: 65.00 credits                        │
-   │  New Balance: 935.00 credits               │
-   │                                             │
-   │  Current Position:                          │
-   │  100 shares @ 65% probability              │
-   │  Value: 65.00 credits                      │
-   │                                             │
-   │         [ View Portfolio ]                  │
-   └─────────────────────────────────────────────┘
+App Launch
+│
+├── Auth Screen
+│   ├── Enter email, password, username
+│   ├── Optional: enter friend's referral code
+│   └── Tap "Sign Up"
+│
+├── Account Created
+│   ├── +1,000 starting credits
+│   └── If referral code: +500 bonus credits (referrer also gets +500)
+│
+└── Redirected to Markets tab
+    └── Tournament banner visible at top
 ```
 
 ---
 
-### Flow 2: Daily Reward & Streak
+## 2. Placing a Trade (LMSR Market)
 
 ```
-DAILY LOGIN REWARD
-
-1. User opens app
-   │
-   ├─── Check if lastActiveDate < today
-   │
-   ├─── IF new day:
-   │   ├─── Increment streak
-   │   ├─── Calculate reward: 50 + (streak * 10)
-   │   ├─── Max bonus: 100 credits
-   │   ├─── Add credits to balance
-   │   └─── Show reward popup
-   │
-   └─── IF same day:
-       └─── No reward (show "Come back tomorrow")
-
-┌─────────────────────────────────────────────┐
-│        🎁 Daily Reward Earned!               │
-│                                             │
-│         🔥 5 Day Streak!                     │
-│                                             │
-│       +100 credits                           │
-│                                             │
-│  Base: 50 + Streak Bonus: 50                │
-│                                             │
-│       [ Claim Reward ]                       │
-└─────────────────────────────────────────────┘
+Markets Tab → Tap market card
+│
+├── Market Detail Screen
+│   ├── Price chart (real data from price_history)
+│   ├── Current prices per outcome
+│   ├── Buy/Sell toggle
+│   ├── Select outcome (Yes/No or multiple)
+│   ├── Enter credits to spend
+│   ├── Live preview: shares received, estimated cost, max payout
+│   └── Tap "BUY X SHARES"
+│
+├── Confirmation dialog
+│   └── Tap "Buy" to confirm
+│
+├── Trade executed (Firestore transaction)
+│   ├── Credits deducted
+│   ├── Shares added to holdings
+│   ├── Market prices updated (LMSR)
+│   ├── Price history snapshot recorded
+│   └── Achievement check triggered
+│
+└── Success toast → updated balance shown
 ```
 
 ---
 
-### Flow 3: Market Resolution
+## 3. Tournament Flow (V2 — Numeric Prediction)
+
+### Entering a Tournament
 
 ```
-MARKET RESOLUTION (Admin Flow)
-
-1. Market reaches expiry date
-   │
-   ├─── Admin reviews market
-   ├─── Admin determines outcome (from real-world event)
-   │
-   └─── Admin calls: POST /api/markets/:id/resolve
-       └─── { outcomeId: "yes_outcome_id" }
-
-2. Backend Processing:
-   │
-   ├─── Mark market as RESOLVED
-   ├─── Mark winning outcome as winner
-   ├─── For each holding with winning outcome:
-   │   └─── credits += quantity (1 credit per share)
-   ├─── For each holding with losing outcome:
-   │   └─── value = 0
-   └─── Update user stats (winningTrades, etc.)
-
-3. User Notification (WebSocket):
-   │
-   └─── { type: "MARKET_RESOLVED", marketId: "...", winner: "Yes" }
-
-4. User Views Portfolio:
-   │
-   └─── Market shows: "Resolved: YES" ✅
-   └─── Winning position: "Winnings: +50 credits"
-   └─── Losing position: "Lost: -35 credits" ❌
+Tournaments Screen (hamburger menu) OR banner on Markets tab
+│
+├── See tournament cards grouped by: My Tournaments, Rapid, Weekly, Monthly
+│   Each card shows: question, players, max multiplier, entry fee, time remaining
+│
+├── Tap tournament card → Entry Modal opens
+│   ├── Question: "What will BTC price be on April 8 at 12:00 UTC?"
+│   ├── Current value: $83,500
+│   ├── Historical range: $75,000 — $95,000
+│   ├── Numeric input for prediction
+│   ├── Histogram: where other players are guessing (no exact values)
+│   ├── Prize breakdown: 1st = 5x, 2nd = 3x, 3rd = 2x
+│   ├── Registration deadline countdown
+│   └── Tap "Submit Prediction — 100 credits"
+│
+├── Entry recorded (Firestore transaction)
+│   ├── Credits deducted (entry fee)
+│   ├── Prediction stored
+│   ├── Player count + prize pool updated
+│   └── Can edit prediction until registration closes
+│
+└── Card now shows "Entered" badge
 ```
 
----
-
-## UI Wireframe Descriptions
-
-### Screen 1: Markets List (Home)
+### During Lock Period
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  [Logo]  PredictSpinz           [🔔]  [👤]                 │
-├─────────────────────────────────────────────────────────────┤
-│  [🔍 Search markets...]                                     │
-├─────────────────────────────────────────────────────────────┤
-│  Categories: [All] [Politics] [Sports] [Crypto] [Ent.]     │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐ │
-│  │ 🟢 Politics                          📅 Dec 31       │ │
-│  │                                                       │ │
-│  │  Will Trump win the 2024 Presidential Election?     │ │
-│  │                                                       │ │
-│  │  ┌────────────────┐      ┌────────────────┐         │ │
-│  │  │      YES       │      |      NO       |         │ │
-│  │  │      52%       │      |      48%      |         │ │
-│  │  │    ████████    │      |    ████████   |         │ │
-│  │  └────────────────┘      └────────────────┘         │ │
-│  │                                                       │ │
-│  │  💬 125 comments    📊 5.2K volume                  │ │
-│  └───────────────────────────────────────────────────────┘ │
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐ │
-│  │ 🔵 Crypto                              📅 Nov 30     │ │
-│  │                                                       │ │
-│  │  Will Bitcoin reach $100k in 2024?                  │ │
-│  │                                                       │ │
-│  │  ┌────────────────┐      ┌────────────────┐         │ │
-│  │  │      YES       │      |      NO       |         │ │
-│  │  │      65%       │      |      35%      |         │ │
-│  │  └────────────────┘      └────────────────┘         │ │
-│  │                                                       │ │
-│  │  💬 89 comments     📊 2.5K volume                   │ │
-│  └───────────────────────────────────────────────────────┘ │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│  [🏠]    [📊]    [🏆]    [👤]                                │
-│ Markets Portfolio Leaderboard Profile                      │
-└─────────────────────────────────────────────────────────────┘
+Registration closes → status becomes LOCKED
+│
+├── Tap entered tournament → Tracker Modal
+│   ├── Your prediction vs current live value
+│   ├── Estimated rank (e.g. "#3 of 47 players")
+│   ├── Distance from current value
+│   ├── Progress bar (time remaining)
+│   └── Updated every 15 minutes by scheduler
+│
+└── Push notification: "Predictions locked! 47 players competing"
 ```
 
-### Screen 2: Market Detail & Trading
+### Resolution
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  ←  Will Bitcoin reach $100k in 2024?                      │
-├─────────────────────────────────────────────────────────────┤
-│  📊 Current Probability                                     │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  YES ██████████████████████████████████ 65%        │   │
-│  │  NO  ████████████████████ 35%                       │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  📈 Price History (Last 7 Days)                            │
-│  [Line chart showing YES price from 55% to 65%]            │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│  💳 Balance: 1,000 credits                                 │
-│                                                             │
-│  [ BUY ]  [ SELL ]                                         │
-│                                                             │
-│  Select Outcome:                                           │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ ⚪ YES                                    65%        │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  Quantity:                                                  │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ 100                                                │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  Quick: 10 | 50 | 100 | 250 | Max                         │
-│                                                             │
-│  Cost: 65.00 credits                                       │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │              BUY 100 SHARES                         │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  ⚠️ Credits have no real-world value. Not gambling.      │
-├─────────────────────────────────────────────────────────────┤
-│  💬 Comments (12)                                         │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ @CryptoKing: "Bitcoin to the moon! 🚀"            │   │
-│  │ @TraderJoe: "I think it's happening"              │   │
-│  │ [View all comments...]                             │   │
-│  └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Screen 3: Portfolio
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  📊 Your Portfolio                                         │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  Total Value          Total Cost      P&L           │   │
-│  │  165.00 credits      100.00         +65.00 (65%)  │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  Active Positions (2)                                      │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ 🟢 Will BTC reach $100k?                            │   │
-│  │     YES - 100 shares @ 65%                         │   │
-│  │     Value: 65.00    Cost: 50.00    P&L: +15.00    │   │
-│  │     [SELL]                                         │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ 🟢 Will Trump win 2024?                             │   │
-│  │     YES - 100 shares @ 52%                         │   │
-│  │     Value: 52.00    Cost: 50.00    P&L: +2.00     │   │
-│  │     [SELL]                                         │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  Resolved Markets (1)                                      │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ ⚫ Olympics 2024 Gold                              │   │
-│  │     USA Wins - 50 shares @ 80%                    │   │
-│  │     ✅ Won: +40.00 credits                        │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│  [🏠]    [📊]    [🏆]    [👤]                                │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Screen 4: Leaderboard
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  🏆 Leaderboard                                             │
-├─────────────────────────────────────────────────────────────┤
-│  [Credits] [ROI] [Daily] [Weekly] [All Time]              │
-├─────────────────────────────────────────────────────────────┤
-│  Top 3                                                     │
-│  ┌─────┐  ┌─────┐  ┌─────┐                                │
-│  │ 🥇 │  │ 🥈 │  │ 🥉 │                                │
-│  │ 👤 │  │ 👤 │  │ 👤 │                                │
-│  │ 52K│  │ 48K│  │ 45K│                                │
-│  └─────┘  └─────┘  └─────┘                                │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  #4   👤  PoliticalPundit       42,500 credits      │   │
-│  └─────────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  #5   👤  SportsBettor         38,200 credits       │   │
-│  └─────────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  #6   👤  Entertainer          35,000 credits       │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  ─── Your Rank ───                                        │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  #47  👤  You                 1,000 credits        │   │
-│  │       🔼 Up 3 from yesterday                        │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│  [🏠]    [📊]    [🏆]    [👤]                                │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Screen 5: Profile & Settings
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  👤 Profile                                    [⚙️]        │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│         [Avatar]                                            │
-│     Display Name                                            │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│  💰 Credits: 1,000                         [ + Buy ]       │
-├─────────────────────────────────────────────────────────────┤
-│  📊 Statistics                                              │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  Total Trades         15                            │   │
-│  │  Win Rate             73%                            │   │
-│  │  Best Trade           +500 credits                  │   │
-│  │  Current Streak       🔥 5 days                     │   │
-│  │  Longest Streak       🔥 12 days                     │   │
-│  └─────────────────────────────────────────────────────┘   │
-├─────────────────────────────────────────────────────────────┤
-│  🎖️ Achievements (8/15)                   [View All]       │
-│  ┌────┐ ┌────┐ ┌────┐ ┌────┐ ┌────┐                      │
-│  │ 🎖️│ │ 🎖️│ │ 🎖️│ │ 🎖️│ │ 🔒│                      │
-│  │First│ │10 trades│ │Streak5│ │Win3  │ │    │                      │
-│  └────┘ └────┘ └────┘ └────┘ └────┘                      │
-├─────────────────────────────────────────────────────────────┤
-│  📜 Transaction History                     [View All]      │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ +1,000  Starting Bonus              Today         │   │
-│  │ -65     Buy BTC YES                 Yesterday      │   │
-│  │ +100    Daily Reward (Day 5)        Yesterday      │   │
-│  └─────────────────────────────────────────────────────┘   │
-├─────────────────────────────────────────────────────────────┤
-│  ⚙️ Settings                                               │
-│  ├── Notifications                                         │
-│  ├── Privacy                                               │
-│  ├── Help & Support                                        │
-│  └── Sign Out                                              │
-├─────────────────────────────────────────────────────────────┤
-│  ⚠️ Credits have no real-world value. Not gambling.       │
-└─────────────────────────────────────────────────────────────┘
+Tournament expires → scheduler runs
+│
+├── Fetches actual value from API (CoinGecko, ExchangeRate, etc.)
+├── Ranks all players by |prediction - actual|
+├── Calculates payouts (multiplier × entry fee, capped by pool)
+├── Distributes credits to top players
+├── Records transactions
+│
+├── Push notification to all participants:
+│   ├── Winners: "You placed #2! Won 300 credits"
+│   └── Others: "You placed #15. Better luck next time!"
+│
+├── Tap tournament → Results Modal
+│   ├── Actual value revealed
+│   ├── Your result card (rank, prediction, payout)
+│   └── Full leaderboard with distances and payouts
+│
+└── Next tournament auto-created from same template
 ```
 
 ---
 
-## API Design Summary
+## 4. Daily Reward
 
-### REST Endpoints
+```
+Profile Tab → Tap "Daily Reward: Claim"
+│
+├── Backend calculates: 25 + min(streak × 5, 50)
+│   ├── Free user: max 75 credits/day
+│   └── Pro user: 2x = max 150 credits/day
+│
+├── Streak incremented
+├── Credits added
+└── Alert: "+75 credits! Streak: 12 days"
+```
 
-#### Markets
+---
+
+## 5. Credit Store
+
+```
+Profile Tab → "Credit Store" link  OR  Hamburger → Credit Store
+│
+├── Balance displayed at top
+│
+├── Free Credits section
+│   └── "Watch Ad" button (stubbed — needs AdMob app IDs)
+│
+├── Credit Packs section
+│   ├── Starter Pack — $0.99 (RevenueCat)
+│   ├── Pro Pack — $4.99
+│   └── Whale Pack — $19.99
+│
+├── Predich Pro section
+│   ├── Feature list (2x rewards, free proposals, analytics...)
+│   ├── "View Plans" → opens RevenueCat native paywall
+│   └── Active subscribers see "Manage Subscription" → Customer Center
+│
+└── "Restore Purchases" button (App Store requirement)
+```
+
+---
+
+## 6. Referral System
+
+```
+Friends Screen → Share referral code
+│
+├── User shares code with friend (e.g. "A1B2C3D4")
+│
+├── Friend signs up → enters code in registration form
+│
+├── processReferral Firestore trigger fires
+│   ├── +500 credits to referrer
+│   ├── +500 credits to new user
+│   ├── Transactions recorded
+│   └── Push notification to referrer: "A friend joined! +500 credits"
+│
+└── Referral count updated on referrer's profile
+```
+
+---
+
+## 7. Account Deletion
+
+```
+Settings → Danger Zone → "Delete Account"
+│
+├── Confirmation dialog: "This will permanently delete..."
+├── iOS: Alert.prompt for password
+│   Android: Double-confirm dialog
+│
+├── Backend DELETE /users/me
+│   ├── Verify password (email/password users)
+│   ├── Delete: holdings, transactions, trades, follows, achievements, proposals
+│   └── Delete user document
+│
+├── Local session cleared
+└── Redirect to auth screen
+```
+
+---
+
+## 8. Dark Mode
+
+```
+Settings → Toggle "Dark Mode"
+│
+├── setThemeMode('dark') called
+├── Colors object mutated in-place
+├── ThemeContext.themeKey incremented
+├── Stack navigator remounts (key change)
+├── All useStyles() hooks re-evaluate
+└── Entire app re-renders with dark palette — instant, no restart
+```
+
+---
+
+## API Endpoints
+
+### Auth
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/markets` | List markets with filters |
-| GET | `/api/markets/:id` | Get market details |
-| POST | `/api/markets` | Create market (admin) |
-| POST | `/api/markets/:id/resolve` | Resolve market (admin) |
-| GET | `/api/markets/meta/trending` | Get trending markets |
-| GET | `/api/markets/meta/categories` | Get categories |
+| POST | `/auth/register` | Register with email/password + optional referral code |
+| POST | `/auth/login` | Login, returns JWT |
+| POST | `/auth/firebase-token` | Exchange Firebase ID token for app JWT |
 
-#### Trading
+### Markets
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/trades` | Execute trade (buy/sell) |
-| GET | `/api/trades` | Get trade history |
-| GET | `/api/trades/portfolio` | Get user holdings |
+| GET | `/markets` or `/trades/markets` | List markets (filterable by category) |
+| GET | `/markets/:id` or `/trades/markets/:id` | Market detail |
+| GET | `/markets/meta/trending` | Top 10 by volume |
+| GET | `/markets/:id/price-history` | Price chart data |
+| POST | `/markets/:id/resolve` | Resolve market (admin) |
+| GET/POST | `/markets/:id/comments` | Comments |
+| POST | `/markets/:id/comments/:id/like` | Like comment |
 
-#### Users
+### Trading
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/users/me` | Get current user |
-| PUT | `/api/users/me` | Update profile |
-| GET | `/api/users/me/transactions` | Get transaction history |
-| GET | `/api/users/me/stats` | Get user statistics |
-| POST | `/api/users/me/daily-reward` | Claim daily reward |
-| POST | `/api/users/me/buy-credits` | Purchase credits |
-| GET | `/api/users/credit-packs` | Get credit pack options |
+| POST | `/trades/preview` | Preview buy cost |
+| POST | `/trades/preview-by-cost` | Preview shares for given credits |
+| POST | `/trades/preview-sell` | Preview sell revenue |
+| POST | `/trades/trade` | Execute buy |
+| POST | `/trades/sell` | Execute sell |
+| GET | `/trades/portfolio/:userId` | User holdings |
 
-#### Leaderboard
+### Users
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/leaderboard` | Get global leaderboard |
-| GET | `/api/leaderboard/me` | Get user rank |
-| GET | `/api/leaderboard/achievements` | Get all achievements |
-| GET | `/api/leaderboard/achievements/me` | Get user achievements |
+| GET | `/users/me` | Current user profile |
+| PUT | `/users/me` | Update profile |
+| DELETE | `/users/me` | Delete account + all data |
+| GET | `/users/me/transactions` | Transaction history |
+| POST | `/users/me/daily-reward` | Claim daily reward |
+| POST | `/users/me/ad-reward` | Claim rewarded ad credits |
+| POST | `/users/me/buy-credits` | Purchase credit pack |
+| POST | `/users/me/check-achievements` | Check + award achievements |
+| GET | `/users/search` | Search users by name |
+| GET | `/users/credit-packs` | Available credit packs |
 
-### WebSocket Events
+### Tournaments V2
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/tournaments-v2` | List active tournaments + user entries |
+| GET | `/tournaments-v2/:id` | Detail + distribution histogram |
+| POST | `/tournaments-v2/:id/enter` | Submit prediction + pay fee |
+| PUT | `/tournaments-v2/:id/edit` | Edit prediction (registration only) |
+| GET | `/tournaments-v2/:id/tracker` | Live rank estimate |
+| GET | `/tournaments-v2/:id/results` | Final leaderboard |
+| GET | `/tournaments-v2/recent` | Recently completed |
 
-| Event | Direction | Description |
-|-------|-----------|-------------|
-| `priceUpdate` | Server → Client | Market price changed |
-| `tradeExecuted` | Server → Client | New trade on market |
-| `marketResolved` | Server → Client | Market resolved |
-| `achievementUnlocked` | Server → Client | User earned achievement |
-| `dailyRewardReady` | Server → Client | Daily reward available |
+### Social
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/social/friends` | Friends list |
+| POST/DELETE | `/social/follow/:userId` | Follow/unfollow |
+| GET | `/social/referral` | Referral code + stats |
+| GET | `/social/challenges` | Challenges list |
 
----
+### Leaderboard
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/leaderboard` | Global rankings |
+| GET | `/leaderboard/achievements` | Achievement definitions |
 
-## Database Schema Summary
+### Proposals
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/proposals` | List proposals |
+| POST | `/proposals` | Submit proposal (50 credit fee, free for Pro) |
+| GET | `/proposals/mine` | User's proposals |
+| POST | `/proposals/:id/vote` | Upvote |
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      DATABASE SCHEMA                             │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  Users ─────────┬──> Transactions                               │
-│     │           │     │                                          │
-│     │           │     └── (credit history)                     │
-│     │           │                                                │
-│     ├──> Holdings ──> Markets                                   │
-│     │     │         (user's shares in outcomes)                │
-│     │     │                                                    │
-│     │     └──> Outcomes                                         │
-│     │                                                        │
-│     ├──> Trades ──> Markets                                     │
-│     │                                                        │
-│     ├──> Achievements <── UserAchievements                      │
-│     │                                                        │
-│     └──> Follows                                               │
-│              (social)                                          │
-│                                                                 │
-│  Markets ──────> Outcomes ──> Trades                            │
-│     │                                                        │
-│     └──> Comments                                              │
-│                                                                 │
-│  CreditPacks (monetization)                                     │
-│                                                                 │
-│  LeaderboardSnapshots (cached rankings)                         │
-│                                                                 │
-│  AuditLogs (admin actions)                                      │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+### Admin
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin/stats` | Dashboard stats |
+| POST | `/admin/sync-markets` | Scrape Polymarket + Manifold |
+| POST | `/admin/users/:id/credits` | Adjust user credits |
+| POST | `/admin/users/:id/ban` | Ban/unban user |
+| POST | `/proposals/:id/approve` | Approve proposal → create market |
+| POST | `/proposals/:id/reject` | Reject proposal |
+| GET | `/admin/tournament-templates` | List tournament templates |
+| POST | `/admin/tournament-templates` | Create template |
+| POST | `/admin/tournament-templates/:id/toggle` | Enable/disable |
+| POST | `/admin/tournaments-v2` | Manually create tournament |
+| POST | `/admin/tournaments-v2/:id/resolve` | Manually resolve |
+| POST | `/admin/tournaments-v2/:id/cancel` | Cancel + refund |

@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
+import { useStyles } from '../../lib/useStyles';
 import { apiClient } from '../../lib/api-client';
 import { signOut } from '../../lib/auth';
 
@@ -27,6 +28,7 @@ interface ProfileData {
 }
 
 export default function ProfileScreen() {
+  const styles = useStyles(createStyles);
   const router = useRouter();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -210,36 +212,18 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Get More Credits */}
-        <Text style={styles.sectionTitle}>Get More Credits</Text>
-        <View style={styles.creditPacksRow}>
-          {[
-            { code: 'starter', name: 'Starter', credits: 500, icon: 'flash-outline' },
-            { code: 'pro', name: 'Pro', credits: '2K', icon: 'rocket-outline' },
-            { code: 'whale', name: 'Whale', credits: '10K', icon: 'diamond-outline' },
-          ].map(pack => (
-            <TouchableOpacity
-              key={pack.code}
-              style={styles.creditPackCard}
-              onPress={async () => {
-                Alert.alert('Get Credits', `Add ${pack.credits} credits to your balance?`, [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Get', onPress: async () => {
-                    const res = await apiClient.buyCredits(pack.code);
-                    if (res.success) {
-                      setProfile(prev => prev ? { ...prev, creditBalance: res.data.newBalance } : prev);
-                      Alert.alert('Credits Added!', `+${res.data.creditsAdded} credits. New balance: ${res.data.newBalance}`);
-                    }
-                  }},
-                ]);
-              }}
-            >
-              <Ionicons name={pack.icon as any} size={24} color={Colors.primary} />
-              <Text style={styles.creditPackCredits}>+{pack.credits}</Text>
-              <Text style={styles.creditPackName}>{pack.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* Get More Credits — link to Store */}
+        <TouchableOpacity
+          style={styles.storeLink}
+          onPress={() => router.push('/(tabs)/store' as any)}
+        >
+          <Ionicons name="cart-outline" size={22} color={Colors.primary} />
+          <View style={styles.storeLinkContent}>
+            <Text style={styles.storeLinkTitle}>Credit Store</Text>
+            <Text style={styles.storeLinkSubtitle}>Buy credit packs, watch ads, or go premium</Text>
+          </View>
+          <Text style={styles.storeLinkArrow}>›</Text>
+        </TouchableOpacity>
 
         {/* Sign Out */}
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
@@ -257,7 +241,7 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() { return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -472,10 +456,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
-  creditPacksRow: { flexDirection: 'row', paddingHorizontal: Spacing.md, gap: Spacing.sm, marginBottom: Spacing.lg },
-  creditPackCard: { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, padding: Spacing.lg, alignItems: 'center', gap: Spacing.xs, borderWidth: 1, borderColor: Colors.border },
-  creditPackCredits: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.primary },
-  creditPackName: { fontSize: FontSize.xs, color: Colors.textSecondary },
+  storeLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+  },
+  storeLinkContent: { flex: 1 },
+  storeLinkTitle: { color: Colors.textPrimary, fontSize: FontSize.lg, fontWeight: '600' },
+  storeLinkSubtitle: { color: Colors.textSecondary, fontSize: FontSize.sm, marginTop: 2 },
+  storeLinkArrow: { fontSize: 28, color: Colors.primary, fontWeight: '600' },
   signOutButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -501,4 +495,4 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: FontSize.xs,
   },
-});
+}); }

@@ -75,12 +75,15 @@ export async function signIn(email: string, password: string): Promise<AuthUser>
 export async function signUp(
   email: string,
   password: string,
-  displayName: string
+  displayName: string,
+  referralCode?: string
 ): Promise<AuthUser> {
+  const body: any = { email, password, displayName };
+  if (referralCode) body.referralCode = referralCode;
   const res = await fetch(`${API_BASE}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, displayName }),
+    body: JSON.stringify(body),
   });
   const json = await res.json();
   if (!json.success) {

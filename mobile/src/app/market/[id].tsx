@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
-import { Comments, showToast, showConfirm } from '../../lib/components';
+import { useStyles } from '../../lib/useStyles';
+import { Comments, showToast, showConfirm, PriceChart } from '../../lib/components';
+import type { PricePoint } from '../../lib/components';
 import { apiClient, type Market, type TradeResult } from '../../lib/api-client';
 import websocketService from '../../lib/websocket';
 
@@ -21,6 +23,7 @@ const DEFAULT_MARKET: Market = {
 };
 
 export default function MarketDetailScreen() {
+  const styles = useStyles(createStyles);
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const [market, setMarket] = useState<Market>(DEFAULT_MARKET);
@@ -36,6 +39,9 @@ export default function MarketDetailScreen() {
   const [sellPreviewRevenue, setSellPreviewRevenue] = useState<number | null>(null);
   const [executingTrade, setExecutingTrade] = useState(false);
   const [userHoldings, setUserHoldings] = useState<Record<string, number>>({});
+
+  // Price history for chart
+  const [priceHistory, setPriceHistory] = useState<PricePoint[]>([]);
 
   // Comments
   const [comments, setComments] = useState<any[]>([]);
@@ -66,6 +72,22 @@ export default function MarketDetailScreen() {
         }
 
         setMarket(fetchedMarket);
+
+        // Fetch real price history for chart
+        const historyRes = await apiClient.getPriceHistory(marketId);
+        if (historyRes.success && historyRes.data && historyRes.data.length > 0) {
+          // Use the first outcome's price as the chart line (typically "Yes")
+          const firstOutcomeId = fetchedMarket.outcomes[0]?.id;
+          if (firstOutcomeId) {
+            const points: PricePoint[] = historyRes.data
+              .filter((h: any) => h.prices && h.prices[firstOutcomeId] != null)
+              .map((h: any) => ({
+                timestamp: new Date(h.timestamp).getTime(),
+                price: h.prices[firstOutcomeId],
+              }));
+            setPriceHistory(points);
+          }
+        }
       } else {
         setError(response.error || 'Failed to load market');
       }
@@ -339,6 +361,14 @@ export default function MarketDetailScreen() {
           </View>
         </View>
 
+        {/* Price History Chart */}
+        {priceHistory.length > 1 && (
+          <View style={styles.chartSection}>
+            <Text style={styles.chartTitle}>Price History</Text>
+            <PriceChart data={priceHistory} />
+          </View>
+        )}
+
         {/* Trading Section */}
         <View style={styles.tradingSection}>
           <Text style={styles.sectionTitle}>Trade</Text>
@@ -527,7 +557,7 @@ export default function MarketDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() { return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -838,4 +868,14 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     marginTop: Spacing.sm,
   },
-});
+  chartSection: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  chartTitle: {
+    color: Colors.textPrimary,
+    fontSize: FontSize.lg,
+    fontWeight: '700',
+    marginBottom: Spacing.md,
+  },
+}); }

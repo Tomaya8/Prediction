@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
+import { useStyles } from '../../lib/useStyles';
 import { apiClient } from '../../lib/api-client';
 import { getStoredUser } from '../../lib/auth';
 
@@ -33,6 +34,7 @@ function fmtPnl(value: number): string {
 }
 
 export default function PortfolioScreen() {
+  const styles = useStyles(createStyles);
   const router = useRouter();
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [loading, setLoading] = useState(true);
@@ -214,7 +216,7 @@ export default function PortfolioScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() { return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -406,4 +408,4 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: FontSize.xs,
   },
-});
+}); }

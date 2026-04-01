@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "prediction-app-2026"
-  }
+  },
+  "targets": {
+    "prediction-app-2026": {
+      "hosting": {
+        "admin": [
+          "predich-admin"
+        ],
+        "app": [
+          "prediction-app-2026"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

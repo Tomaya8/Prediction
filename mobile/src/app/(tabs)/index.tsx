@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, T
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, FontSize } from '../../lib/colors';
+import { useStyles } from '../../lib/useStyles';
 
 import { TrendingMarkets, showToast, MarketListSkeleton } from '../../lib/components';
 import { apiClient, type Market } from '../../lib/api-client';
@@ -11,6 +12,7 @@ import { getStoredUser } from '../../lib/auth';
 const CATEGORIES = ['All', 'Politics', 'Sports', 'Crypto', 'Entertainment', 'Science', 'Technology', 'Business'];
 
 export default function MarketsScreen() {
+  const styles = useStyles(createStyles);
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -23,6 +25,18 @@ export default function MarketsScreen() {
   const [claimingReward, setClaimingReward] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [featuredTournament, setFeaturedTournament] = useState<any>(null);
+
+  // Fetch featured tournament for banner
+  useEffect(() => {
+    apiClient.getTournamentsV2().then(res => {
+      if (res.success && res.data?.tournaments?.length) {
+        // Pick the first REGISTRATION tournament
+        const open = res.data.tournaments.find((t: any) => t.status === 'REGISTRATION');
+        if (open) setFeaturedTournament(open);
+      }
+    }).catch(() => {});
+  }, []);
 
   // Fetch markets from API
   const fetchMarkets = useCallback(async (isRefresh = false) => {
@@ -233,6 +247,27 @@ export default function MarketsScreen() {
         ))}
       </ScrollView>
 
+      {/* Tournament Banner */}
+      {featuredTournament && (
+        <TouchableOpacity
+          style={styles.tournamentBanner}
+          onPress={() => router.push('/(tabs)/tournaments' as any)}
+        >
+          <View style={styles.bannerLeft}>
+            <Ionicons name="trophy" size={20} color="#FFD700" />
+            <View style={styles.bannerText}>
+              <Text style={styles.bannerTitle} numberOfLines={1}>{featuredTournament.question}</Text>
+              <Text style={styles.bannerSub}>
+                {featuredTournament.playerCount} players · Up to {featuredTournament.payoutTable?.[0]?.payout > 0
+                  ? `${(featuredTournament.payoutTable[0].payout / featuredTournament.entryFee).toFixed(0)}x`
+                  : '10x'} payout
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.bannerJoin}>JOIN</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Trending Markets */}
       <TrendingMarkets markets={trendingMarkets} />
 
@@ -304,7 +339,7 @@ export default function MarketsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() { return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -524,4 +559,41 @@ const styles = StyleSheet.create({
     fontSize: FontSize.lg,
     color: Colors.textPrimary,
   },
-});
+  tournamentBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surface,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#FFD700' + '40',
+  },
+  bannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: Spacing.sm,
+  },
+  bannerText: {
+    flex: 1,
+  },
+  bannerTitle: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  bannerSub: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  bannerJoin: {
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.primary,
+    paddingHorizontal: Spacing.md,
+  },
+}); }

@@ -32,6 +32,7 @@ export default function AuthScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
@@ -59,7 +60,7 @@ export default function AuthScreen() {
       if (mode === 'signin') {
         await signIn(email.trim(), password);
       } else {
-        await signUp(email.trim(), password, displayName.trim());
+        await signUp(email.trim(), password, displayName.trim(), referralCode.trim() || undefined);
       }
       // _layout.tsx auth guard will navigate to /(tabs) automatically
     } catch (error: any) {
@@ -142,6 +143,21 @@ export default function AuthScreen() {
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry
+              />
+            </View>
+          )}
+
+          {mode === 'signup' && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Referral Code (optional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter friend's referral code"
+                placeholderTextColor={Colors.textMuted}
+                value={referralCode}
+                onChangeText={setReferralCode}
+                autoCapitalize="characters"
+                maxLength={20}
               />
             </View>
           )}

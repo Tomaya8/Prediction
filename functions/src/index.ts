@@ -6,6 +6,9 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import * as bcrypt from "bcryptjs";
 import * as jwt from "jsonwebtoken";
+import { z } from "zod";
+import { handleAdminRoute } from "./admin";
+import { handleTournamentRoute, handleTournamentAdminRoute, resolveTournament, updateTournamentStatuses, autoCreateTournaments, updateLiveValues, fetchCurrentPrice } from "./tournaments";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -14,14 +17,108 @@ const db = admin.firestore();
 // Fallback for dev only
 const JWT_SECRET = functions.config().app?.jwt_secret || process.env.JWT_SECRET || "predich-change-me-in-production";
 
-const CORS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type,Authorization",
-};
+// ─── CORS (P0-3: locked to known origins) ────────────────────────────────────
+const ALLOWED_ORIGINS = [
+  "https://predich-admin.web.app",
+  "https://prediction-app-2026.web.app",
+  "http://localhost:3000",
+  "http://localhost:19006",
+];
 
+function getCorsHeaders(req: functions.Request): Record<string, string> {
+  const origin = req.headers.origin || "";
+  // Mobile apps send no origin — allow them. Web requests must match allowlist.
+  const allowedOrigin = !origin || ALLOWED_ORIGINS.includes(origin) ? origin || "*" : "";
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type,Authorization",
+  };
+}
+
+// ─── Zod Schemas (P0-4: input validation) ─────────────────────────────────────
+const RegisterSchema = z.object({
+  email: z.string().email("Valid email required").transform(v => v.trim().toLowerCase()),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  displayName: z.string().trim().min(1).max(50).optional(),
+  referralCode: z.string().trim().max(20).optional(),
+});
+
+const LoginSchema = z.object({
+  email: z.string().email().transform(v => v.trim().toLowerCase()),
+  password: z.string().min(1, "Password required"),
+});
+
+const TradeSchema = z.object({
+  marketId: z.string().min(1),
+  outcomeId: z.string().min(1),
+  amount: z.number().positive().max(1e6, "Amount too large"),
+  maxCost: z.number().positive().optional(),
+});
+
+const SellSchema = z.object({
+  marketId: z.string().min(1),
+  outcomeId: z.string().min(1),
+  amount: z.number().positive().max(1e6, "Amount too large"),
+});
+
+const PreviewSchema = z.object({
+  marketId: z.string().min(1),
+  outcomeId: z.string().min(1),
+  amount: z.number().positive().optional(),
+  credits: z.number().positive().optional(),
+});
+
+const CommentSchema = z.object({
+  content: z.string().trim().min(1, "Comment cannot be empty").max(500, "Comment must be 1-500 characters"),
+  parentId: z.string().optional(),
+});
+
+const ProposalSchema = z.object({
+  title: z.string().trim().min(5, "Title must be at least 5 characters").max(200),
+  description: z.string().trim().max(1000).optional(),
+  category: z.string().optional().default("OTHER"),
+  outcomes: z.array(z.string()).min(2).max(10).optional(),
+  suggestedExpiry: z.string().optional().default(""),
+  resolutionCriteria: z.string().max(500).optional(),
+  sourceUrl: z.string().url().optional(),
+});
+
+function validate<T>(schema: z.ZodSchema<T>, data: unknown): { success: true; data: T } | { success: false; error: string } {
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    const msg = result.error.issues.map((e: any) => e.message).join("; ");
+    return { success: false, error: msg };
+  }
+  return { success: true, data: result.data };
+}
+
+// ─── Rate Limiting (P0-2: Firestore-backed, survives instance restarts) ──────
+async function checkRateLimit(key: string, limit: number, windowMs: number): Promise<boolean> {
+  const ref = db.collection("rate_limits").doc(key);
+  const now = Date.now();
+  try {
+    const result = await db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      if (!doc.exists || now > (doc.data()!.resetAt || 0)) {
+        tx.set(ref, { count: 1, resetAt: now + windowMs });
+        return true;
+      }
+      const count = (doc.data()!.count || 0) + 1;
+      tx.update(ref, { count });
+      return count <= limit;
+    });
+    return result;
+  } catch {
+    // If rate limit check fails, allow the request (fail open)
+    return true;
+  }
+}
+
+// Store req on res for CORS lookup (avoids changing every ok/fail call signature)
+let _currentReq: functions.Request = null as any;
 function send(res: functions.Response, status: number, body: any): void {
-  Object.entries(CORS).forEach(([k, v]) => res.set(k, v));
+  Object.entries(getCorsHeaders(_currentReq)).forEach(([k, v]) => res.set(k, v));
   res.status(status).json(body);
 }
 function ok(res: functions.Response, data: any, status = 200): void { send(res, status, { success: true, data }); }
@@ -89,33 +186,21 @@ function marketToResponse(doc: admin.firestore.DocumentSnapshot): any {
   };
 }
 
-// ─── Rate Limiting (in-memory, per Cloud Function instance) ──────────────────
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-function checkRateLimit(ip: string, limit: number, windowMs: number): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(ip);
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-  entry.count++;
-  return entry.count <= limit;
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const api = functions.https.onRequest(async (req, res) => {
-  if (req.method === "OPTIONS") { Object.entries(CORS).forEach(([k, v]) => res.set(k, v)); res.status(204).send(""); return; }
+  _currentReq = req;
+  if (req.method === "OPTIONS") { Object.entries(getCorsHeaders(req)).forEach(([k, v]) => res.set(k, v)); res.status(204).send(""); return; }
 
   const ip = req.ip || req.headers["x-forwarded-for"] as string || "unknown";
   const path = req.path.replace(/^\/api/, "");
   const method = req.method;
 
-  // Rate limit auth endpoints more strictly
+  // Rate limit auth endpoints more strictly (Firestore-backed)
   if (path.startsWith("/auth/")) {
-    if (!checkRateLimit(`auth:${ip}`, 10, 60000)) { fail(res, "Too many attempts. Try again later.", 429); return; }
+    if (!(await checkRateLimit(`auth:${ip}`, 10, 60000))) { fail(res, "Too many attempts. Try again later.", 429); return; }
   } else {
-    if (!checkRateLimit(ip, 100, 60000)) { fail(res, "Rate limit exceeded.", 429); return; }
+    if (!(await checkRateLimit(ip, 100, 60000))) { fail(res, "Rate limit exceeded.", 429); return; }
   }
 
   try {
@@ -124,19 +209,21 @@ export const api = functions.https.onRequest(async (req, res) => {
     // ═══════════════════════════════════════════════════════════════════
 
     if (path === "/auth/register" && method === "POST") {
-      const { email, password, displayName } = req.body;
-      if (!email || typeof email !== "string") { fail(res, "Valid email required"); return; }
-      if (!password || password.length < 6) { fail(res, "Password must be at least 6 characters"); return; }
-      const ex = await db.collection("users").where("email", "==", email.trim().toLowerCase()).limit(1).get();
+      const v = validate(RegisterSchema, req.body);
+      if (!v.success) { fail(res, v.error); return; }
+      const { email, password, displayName, referralCode } = v.data;
+      const ex = await db.collection("users").where("email", "==", email).limit(1).get();
       if (!ex.empty) { fail(res, "Email already in use", 409); return; }
       const hash = await bcrypt.hash(password, 10);
       const ref = db.collection("users").doc();
-      const userData = {
-        email: email.trim().toLowerCase(), displayName: displayName?.trim() || null, passwordHash: hash,
+      const userData: any = {
+        email, displayName: displayName || null, passwordHash: hash,
         creditBalance: 1000, totalCreditsEarned: 1000, totalCreditsSpent: 0, totalTrades: 0, winningTrades: 0,
         totalWinnings: 0, roi: 0, currentStreak: 0, longestStreak: 0, isPremium: false, isAdmin: false,
+        referralCode: ref.id.slice(0, 8).toUpperCase(), // Generate unique referral code
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       };
+      if (referralCode) userData.referredBy = referralCode;
       await ref.set(userData);
       await db.collection("transactions").add({ userId: ref.id, amount: 1000, type: "STARTING_BONUS", description: "Welcome bonus", createdAt: admin.firestore.FieldValue.serverTimestamp() });
       const token = jwt.sign({ userId: ref.id, email: userData.email }, JWT_SECRET, { expiresIn: "30d" });
@@ -144,14 +231,49 @@ export const api = functions.https.onRequest(async (req, res) => {
     }
 
     if (path === "/auth/login" && method === "POST") {
-      const { email, password } = req.body;
-      if (!email || !password) { fail(res, "Email and password required"); return; }
-      const snap = await db.collection("users").where("email", "==", email.trim().toLowerCase()).limit(1).get();
+      const v = validate(LoginSchema, req.body);
+      if (!v.success) { fail(res, v.error); return; }
+      const { email, password } = v.data;
+      const snap = await db.collection("users").where("email", "==", email).limit(1).get();
       if (snap.empty) { fail(res, "Invalid credentials", 401); return; }
       const doc = snap.docs[0]; const d = doc.data();
       if (!d.passwordHash || !(await bcrypt.compare(password, d.passwordHash))) { fail(res, "Invalid credentials", 401); return; }
       const token = jwt.sign({ userId: doc.id, email: d.email }, JWT_SECRET, { expiresIn: "30d" });
       ok(res, { token, user: { id: doc.id, email: d.email, displayName: d.displayName, creditBalance: d.creditBalance } }); return;
+    }
+
+    // Exchange Firebase ID token for app JWT (used by admin dashboard Google sign-in)
+    if (path === "/auth/firebase-token" && method === "POST") {
+      const { idToken } = req.body;
+      if (!idToken) { fail(res, "idToken required"); return; }
+      try {
+        const decoded = await admin.auth().verifyIdToken(idToken);
+        const email = (decoded.email || "").toLowerCase();
+        if (!email) { fail(res, "No email in token", 401); return; }
+        // Find or create user
+        let snap = await db.collection("users").where("email", "==", email).limit(1).get();
+        let userId: string;
+        let displayName: string;
+        if (snap.empty) {
+          const ref = db.collection("users").doc();
+          await ref.set({
+            email, displayName: decoded.name || email.split("@")[0], passwordHash: null,
+            creditBalance: 1000, totalCreditsEarned: 1000, totalCreditsSpent: 0,
+            totalTrades: 0, winningTrades: 0, totalWinnings: 0, roi: 0,
+            currentStreak: 0, longestStreak: 0, isPremium: false, isAdmin: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          userId = ref.id;
+          displayName = decoded.name || email.split("@")[0];
+        } else {
+          userId = snap.docs[0].id;
+          displayName = snap.docs[0].data().displayName || email;
+        }
+        const token = jwt.sign({ userId, email }, JWT_SECRET, { expiresIn: "30d" });
+        ok(res, { token, user: { id: userId, email, displayName } }); return;
+      } catch (e: any) {
+        fail(res, "Invalid Firebase token", 401); return;
+      }
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -230,6 +352,9 @@ export const api = functions.https.onRequest(async (req, res) => {
           }
         }
       });
+      // Notify all holders that the market was resolved
+      const winningOutcome = mDoc.data()!.outcomes?.find((o: any) => o.id === outcomeId);
+      notifyMarketHolders(marketId, "Market Resolved!", `"${mDoc.data()!.title}" resolved: ${winningOutcome?.name || "Unknown"}`);
       ok(res, { message: "Market resolved", winnersCount }); return;
     }
 
@@ -238,8 +363,10 @@ export const api = functions.https.onRequest(async (req, res) => {
     // ═══════════════════════════════════════════════════════════════════
 
     if (path === "/trades/preview-by-cost" && method === "POST") {
-      const { marketId, outcomeId, credits } = req.body;
-      if (!marketId || !outcomeId || !credits || credits <= 0) { fail(res, "Missing fields"); return; }
+      const v = validate(PreviewSchema, req.body);
+      if (!v.success) { fail(res, v.error); return; }
+      const { marketId, outcomeId, credits } = v.data as any;
+      if (!credits || credits <= 0) { fail(res, "credits must be positive"); return; }
       const doc = await db.collection("markets").doc(marketId).get();
       if (!doc.exists) { fail(res, "Market not found", 404); return; }
       const d = doc.data()!; const oc = parseOutcomes(d, doc.id); const b = d.liquidityParameter || 1000;
@@ -249,8 +376,10 @@ export const api = functions.https.onRequest(async (req, res) => {
     }
 
     if (path === "/trades/preview" && method === "POST") {
-      const { marketId, outcomeId, amount } = req.body;
-      if (!marketId || !outcomeId || !amount || amount <= 0) { fail(res, "Missing fields"); return; }
+      const v = validate(PreviewSchema, req.body);
+      if (!v.success) { fail(res, v.error); return; }
+      const { marketId, outcomeId, amount } = v.data as any;
+      if (!amount || amount <= 0) { fail(res, "amount must be positive"); return; }
       const doc = await db.collection("markets").doc(marketId).get();
       if (!doc.exists) { fail(res, "Market not found", 404); return; }
       const d = doc.data()!; const oc = parseOutcomes(d, doc.id); const b = d.liquidityParameter || 1000;
@@ -259,8 +388,9 @@ export const api = functions.https.onRequest(async (req, res) => {
     }
 
     if (path === "/trades/preview-sell" && method === "POST") {
-      const { marketId, outcomeId, amount } = req.body;
-      if (!marketId || !outcomeId || !amount || amount <= 0) { fail(res, "Missing fields"); return; }
+      const v = validate(SellSchema, req.body);
+      if (!v.success) { fail(res, v.error); return; }
+      const { marketId, outcomeId, amount } = v.data;
       const doc = await db.collection("markets").doc(marketId).get();
       if (!doc.exists) { fail(res, "Market not found", 404); return; }
       const d = doc.data()!; const oc = parseOutcomes(d, doc.id); const b = d.liquidityParameter || 1000;
@@ -272,9 +402,9 @@ export const api = functions.https.onRequest(async (req, res) => {
     if (path === "/trades/trade" && method === "POST") {
       const user = await auth(req);
       if (!user) { fail(res, "Auth required", 401); return; }
-      const { marketId, outcomeId, amount, maxCost } = req.body;
-      if (!marketId || !outcomeId || !amount || amount <= 0 || typeof amount !== "number") { fail(res, "Missing or invalid fields"); return; }
-      if (amount > 1e6) { fail(res, "Amount too large"); return; }
+      const v = validate(TradeSchema, req.body);
+      if (!v.success) { fail(res, v.error); return; }
+      const { marketId, outcomeId, amount, maxCost } = v.data;
 
       const marketRef = db.collection("markets").doc(marketId);
       const userRef = db.collection("users").doc(user.id);
@@ -310,8 +440,9 @@ export const api = functions.https.onRequest(async (req, res) => {
     if (path === "/trades/sell" && method === "POST") {
       const user = await auth(req);
       if (!user) { fail(res, "Auth required", 401); return; }
-      const { marketId, outcomeId, amount } = req.body;
-      if (!marketId || !outcomeId || !amount || amount <= 0 || typeof amount !== "number") { fail(res, "Missing or invalid fields"); return; }
+      const v = validate(SellSchema, req.body);
+      if (!v.success) { fail(res, v.error); return; }
+      const { marketId, outcomeId, amount } = v.data;
 
       const marketRef = db.collection("markets").doc(marketId);
       const userRef = db.collection("users").doc(user.id);
@@ -444,7 +575,9 @@ export const api = functions.https.onRequest(async (req, res) => {
         const d = doc.data()!;
         const today = new Date(); today.setHours(0, 0, 0, 0);
         if (d.lastActiveDate && d.lastActiveDate.toDate() >= today) throw new Error("Already claimed");
-        const reward = 50 + Math.min((d.currentStreak || 0) * 10, 100);
+        // Rebalanced: base 25 + streak bonus (max 50) = max 75/day; premium gets 2x
+        const baseReward = 25 + Math.min((d.currentStreak || 0) * 5, 50);
+        const reward = d.isPremium ? baseReward * 2 : baseReward;
         const streak = (d.currentStreak || 0) + 1;
         tx.update(userRef, {
           creditBalance: admin.firestore.FieldValue.increment(reward),
@@ -461,6 +594,47 @@ export const api = functions.https.onRequest(async (req, res) => {
         return { reward, streak, balance: d.creditBalance + reward };
       });
       ok(res, result); return;
+    }
+
+    // ── ACCOUNT DELETION (P0-1: Apple App Store requirement) ────────────
+    if (path === "/users/me" && method === "DELETE") {
+      const user = await auth(req);
+      if (!user) { fail(res, "Auth required", 401); return; }
+      const { password } = req.body || {};
+      // Verify password for email/password users
+      const userDoc = await db.collection("users").doc(user.id).get();
+      if (!userDoc.exists) { fail(res, "User not found", 404); return; }
+      const ud = userDoc.data()!;
+      if (ud.passwordHash) {
+        if (!password) { fail(res, "Password required to delete account"); return; }
+        if (!(await bcrypt.compare(password, ud.passwordHash))) { fail(res, "Invalid password", 401); return; }
+      }
+      // Delete user data across all collections
+      const batch = db.batch();
+      // Delete holdings
+      const holdings = await db.collection("holdings").where("userId", "==", user.id).get();
+      holdings.docs.forEach(d => batch.delete(d.ref));
+      // Delete transactions
+      const txns = await db.collection("transactions").where("userId", "==", user.id).get();
+      txns.docs.forEach(d => batch.delete(d.ref));
+      // Delete trades
+      const trades = await db.collection("trades").where("userId", "==", user.id).get();
+      trades.docs.forEach(d => batch.delete(d.ref));
+      // Delete follows (both directions)
+      const following = await db.collection("follows").where("followerId", "==", user.id).get();
+      following.docs.forEach(d => batch.delete(d.ref));
+      const followers = await db.collection("follows").where("followingId", "==", user.id).get();
+      followers.docs.forEach(d => batch.delete(d.ref));
+      // Delete achievements
+      const achievements = await db.collection("user_achievements").where("userId", "==", user.id).get();
+      achievements.docs.forEach(d => batch.delete(d.ref));
+      // Delete proposals
+      const proposals = await db.collection("proposals").where("createdById", "==", user.id).get();
+      proposals.docs.forEach(d => batch.delete(d.ref));
+      // Delete the user document last
+      batch.delete(db.collection("users").doc(user.id));
+      await batch.commit();
+      ok(res, { message: "Account deleted successfully" }); return;
     }
 
     if (path === "/users/search" && method === "GET") {
@@ -487,10 +661,14 @@ export const api = functions.https.onRequest(async (req, res) => {
       const user = await auth(req);
       if (!user) { fail(res, "Auth required", 401); return; }
       const { packCode } = req.body;
-      const packs: Record<string, number> = { starter: 500, pro: 2000, whale: 10000 };
+      // Support both legacy pack codes and RevenueCat product IDs
+      const packs: Record<string, number> = {
+        starter: 500, pro: 2000, whale: 10000,
+        predich_credits_500: 500, predich_credits_2000: 2000, predich_credits_10000: 10000,
+      };
       const credits = packs[packCode];
       if (!credits) { fail(res, "Invalid pack code"); return; }
-      // In production: validate payment here. For now: free virtual credits
+      // TODO: In production, validate RevenueCat receipt via webhook or server-side API
       await db.collection("users").doc(user.id).update({
         creditBalance: admin.firestore.FieldValue.increment(credits),
         totalCreditsEarned: admin.firestore.FieldValue.increment(credits),
@@ -502,6 +680,37 @@ export const api = functions.https.onRequest(async (req, res) => {
       });
       const doc = await db.collection("users").doc(user.id).get();
       ok(res, { creditsAdded: credits, newBalance: doc.data()!.creditBalance }); return;
+    }
+
+    // ── AD REWARD (P1-3: credits for watching rewarded video ads) ───
+    if (path === "/users/me/ad-reward" && method === "POST") {
+      const user = await auth(req);
+      if (!user) { fail(res, "Auth required", 401); return; }
+      const AD_CREDITS = 50;
+      const MAX_ADS_PER_DAY = 5;
+      const userRef = db.collection("users").doc(user.id);
+      const result = await db.runTransaction(async (tx) => {
+        const doc = await tx.get(userRef);
+        if (!doc.exists) throw new Error("User not found");
+        const d = doc.data()!;
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const lastAdDate = d.lastAdRewardDate?.toDate();
+        const adsToday = (lastAdDate && lastAdDate >= today) ? (d.adsWatchedToday || 0) : 0;
+        if (adsToday >= MAX_ADS_PER_DAY) throw new Error("Daily ad limit reached");
+        tx.update(userRef, {
+          creditBalance: admin.firestore.FieldValue.increment(AD_CREDITS),
+          totalCreditsEarned: admin.firestore.FieldValue.increment(AD_CREDITS),
+          adsWatchedToday: adsToday + 1,
+          lastAdRewardDate: admin.firestore.Timestamp.now(),
+        });
+        tx.set(db.collection("transactions").doc(), {
+          userId: user.id, amount: AD_CREDITS, type: "AD_REWARD",
+          description: "Watched rewarded video ad",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return { credits: AD_CREDITS, adsRemaining: MAX_ADS_PER_DAY - (adsToday + 1), newBalance: d.creditBalance + AD_CREDITS };
+      });
+      ok(res, result); return;
     }
 
     // ── ACHIEVEMENT AUTO-TRACKING ────────────────────────────────────
@@ -589,8 +798,9 @@ export const api = functions.https.onRequest(async (req, res) => {
       const user = await auth(req);
       if (!user) { fail(res, "Auth required", 401); return; }
       const marketId = path.split("/")[2];
-      const { content } = req.body;
-      if (!content?.trim() || content.trim().length > 500) { fail(res, "Comment must be 1-500 characters"); return; }
+      const vc = validate(CommentSchema, req.body);
+      if (!vc.success) { fail(res, vc.error); return; }
+      const { content } = vc.data;
       const userDoc = await db.collection("users").doc(user.id).get();
       const displayName = userDoc.exists ? userDoc.data()!.displayName : "Anonymous";
       const ref = await db.collection("comments").add({
@@ -662,7 +872,16 @@ export const api = functions.https.onRequest(async (req, res) => {
       if (!user) { fail(res, "Auth required", 401); return; }
       const doc = await db.collection("users").doc(user.id).get();
       const d = doc.data() || {};
-      ok(res, { referralCode: d.referralCode || user.id.slice(0, 8).toUpperCase(), referralCount: 0, creditsEarned: 0 }); return;
+      const referralCode = d.referralCode || user.id.slice(0, 8).toUpperCase();
+      // If user doesn't have a referralCode stored yet, save it
+      if (!d.referralCode) {
+        await db.collection("users").doc(user.id).update({ referralCode });
+      }
+      ok(res, {
+        referralCode,
+        referralCount: d.referralCount || 0,
+        creditsEarned: (d.referralCount || 0) * 500,
+      }); return;
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -680,10 +899,27 @@ export const api = functions.https.onRequest(async (req, res) => {
     if (path === "/proposals" && method === "POST") {
       const user = await auth(req);
       if (!user) { fail(res, "Auth required", 401); return; }
-      const { title, description, category, outcomes, suggestedExpiry, resolutionCriteria } = req.body;
-      if (!title?.trim() || title.trim().length < 5) { fail(res, "Title must be at least 5 characters"); return; }
+      const vp = validate(ProposalSchema, req.body);
+      if (!vp.success) { fail(res, vp.error); return; }
+      const { title, description, category, outcomes, suggestedExpiry, resolutionCriteria } = vp.data;
+      const PROPOSAL_FEE = 50; // Credit sink: costs 50 credits to propose a market
       const userDoc = await db.collection("users").doc(user.id).get();
-      const displayName = userDoc.exists ? userDoc.data()!.displayName : "Anonymous";
+      if (!userDoc.exists) { fail(res, "User not found", 404); return; }
+      const ud = userDoc.data()!;
+      const displayName = ud.displayName || "Anonymous";
+      // Premium users get free proposals
+      if (!ud.isPremium) {
+        if (ud.creditBalance < PROPOSAL_FEE) { fail(res, `Insufficient credits. Proposals cost ${PROPOSAL_FEE} credits.`); return; }
+        await db.collection("users").doc(user.id).update({
+          creditBalance: admin.firestore.FieldValue.increment(-PROPOSAL_FEE),
+          totalCreditsSpent: admin.firestore.FieldValue.increment(PROPOSAL_FEE),
+        });
+        await db.collection("transactions").add({
+          userId: user.id, amount: -PROPOSAL_FEE, type: "PROPOSAL_FEE",
+          description: `Market proposal fee: ${title.trim()}`,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
       const ref = await db.collection("proposals").add({
         title: title.trim(), description: description?.trim() || null, category: category || "OTHER",
         outcomes: Array.isArray(outcomes) && outcomes.length >= 2 ? outcomes : ["Yes", "No"],
@@ -692,7 +928,7 @@ export const api = functions.https.onRequest(async (req, res) => {
         createdBy: { id: user.id, displayName },
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      ok(res, { id: ref.id, title: title.trim(), status: "PENDING", upvotes: 0, createdBy: { id: user.id, displayName } }, 201); return;
+      ok(res, { id: ref.id, title: title.trim(), status: "PENDING", upvotes: 0, fee: ud.isPremium ? 0 : PROPOSAL_FEE, createdBy: { id: user.id, displayName } }, 201); return;
     }
 
     if (path === "/proposals/mine" && method === "GET") {
@@ -727,11 +963,73 @@ export const api = functions.https.onRequest(async (req, res) => {
       ok(res, snap.docs.map(d => ({ id: d.id, ...d.data(), participants: 0 }))); return;
     }
 
+    // ── TOURNAMENT JOIN (with entry fee credit sink) ─────────────────
+    if (path.match(/^\/tournaments\/[^/]+\/join$/) && method === "POST") {
+      const user = await auth(req);
+      if (!user) { fail(res, "Auth required", 401); return; }
+      const tournamentId = path.split("/")[2];
+      const tDoc = await db.collection("tournaments").doc(tournamentId).get();
+      if (!tDoc.exists) { fail(res, "Tournament not found", 404); return; }
+      const t = tDoc.data()!;
+      const entryFee = t.entryFee || 100; // default 100 credits entry fee
+
+      const result = await db.runTransaction(async (tx) => {
+        const userRef = db.collection("users").doc(user.id);
+        const uDoc = await tx.get(userRef);
+        if (!uDoc.exists) throw new Error("User not found");
+        const ud = uDoc.data()!;
+        if (ud.creditBalance < entryFee) throw new Error("Insufficient credits for entry fee");
+        // Check if already joined
+        const participantId = `${user.id}_${tournamentId}`;
+        const pRef = db.collection("tournament_participants").doc(participantId);
+        const pDoc = await tx.get(pRef);
+        if (pDoc.exists) throw new Error("Already joined this tournament");
+        // Deduct entry fee
+        tx.update(userRef, {
+          creditBalance: admin.firestore.FieldValue.increment(-entryFee),
+          totalCreditsSpent: admin.firestore.FieldValue.increment(entryFee),
+        });
+        tx.set(pRef, { userId: user.id, tournamentId, joinedAt: admin.firestore.FieldValue.serverTimestamp() });
+        tx.set(db.collection("transactions").doc(), {
+          userId: user.id, amount: -entryFee, type: "TOURNAMENT_ENTRY",
+          description: `Tournament entry fee: ${t.name || tournamentId}`,
+          referenceId: tournamentId,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return { message: "Joined tournament", entryFee, newBalance: ud.creditBalance - entryFee };
+      });
+      ok(res, result); return;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // TOURNAMENTS V2
+    // ═══════════════════════════════════════════════════════════════════
+
+    if (path.startsWith("/tournaments-v2")) {
+      const user = await auth(req);
+      const tournamentResult = await handleTournamentRoute(path, method, req.body, user?.id || null);
+      if (tournamentResult) { send(res, tournamentResult.status, tournamentResult.body); return; }
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     // HEALTH
     // ═══════════════════════════════════════════════════════════════════
 
-    if (path === "/health" || path === "/") { ok(res, { status: "ok", version: "1.1.0" }); return; }
+    // Admin routes (approve, reject, credits, ban, sync, stats, tournament admin)
+    const user = await auth(req);
+    if (user) {
+      const uDoc = await db.collection("users").doc(user.id).get();
+      if (uDoc.exists && uDoc.data()!.isAdmin) {
+        // Tournament admin routes
+        const tAdminResult = await handleTournamentAdminRoute(path, method, req.body);
+        if (tAdminResult) { send(res, tAdminResult.status, tAdminResult.body); return; }
+        // Other admin routes
+        const adminResult = await handleAdminRoute(path, method, req.body, user.id);
+        if (adminResult) { send(res, adminResult.status, adminResult.body); return; }
+      }
+    }
+
+    if (path === "/health" || path === "/") { ok(res, { status: "ok", version: "1.2.0" }); return; }
 
     fail(res, "Route not found", 404);
   } catch (e: any) {
@@ -740,7 +1038,70 @@ export const api = functions.https.onRequest(async (req, res) => {
     fail(res, e.message || "Internal server error", status);
   }
 });
-// v1.2.0
+// v1.3.0 — Node.js 22
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Push Notifications — uses Expo Push API (free, no FCM setup needed)
+// ═══════════════════════════════════════════════════════════════════════════════
+async function sendPushNotification(userId: string, title: string, body: string, data?: Record<string, string>): Promise<void> {
+  try {
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (!userDoc.exists) return;
+    const pushToken = userDoc.data()!.pushToken;
+    if (!pushToken || !pushToken.startsWith("ExponentPushToken[")) return;
+
+    await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: pushToken,
+        title,
+        body,
+        data: data || {},
+        sound: "default",
+      }),
+    });
+  } catch (e: any) {
+    console.error("Push notification failed:", e.message);
+  }
+}
+
+// Send notifications to all holders of a market
+async function notifyMarketHolders(marketId: string, title: string, body: string): Promise<void> {
+  const holdings = await db.collection("holdings").where("marketId", "==", marketId).get();
+  const userIds = [...new Set(holdings.docs.map(d => d.data().userId))];
+  await Promise.all(userIds.map(uid => sendPushNotification(uid, title, body, { marketId })));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Smart category detection from title keywords
+// ═══════════════════════════════════════════════════════════════════════════════
+const CAT_KEYWORDS: Record<string, string[]> = {
+  POLITICS: ["president", "election", "congress", "senate", "trump", "biden", "democrat", "republican", "governor", "vote", "political", "supreme court", "legislation", "parliament", "prime minister", "party", "inaugur", "impeach", "nato", "sanctions", "tariff", "newsom", "desantis", "vance", "pence", "obama"],
+  SPORTS: ["nba", "nfl", "mlb", "nhl", "ufc", "fifa", "world cup", "super bowl", "championship", "playoff", "ncaa", "tournament", "soccer", "football", "basketball", "baseball", "tennis", "golf", "olympic", "match", "league", "premier league", "champion", "medal", "athlete", "game", "purdue", "lakers", "celtics"],
+  CRYPTO: ["bitcoin", "btc", "ethereum", "eth", "solana", "sol", "crypto", "blockchain", "token", "defi", "nft", "altcoin", "binance", "coinbase", "dogecoin", "xrp", "cardano", "mining", "halving", "stablecoin"],
+  ENTERTAINMENT: ["movie", "oscar", "grammy", "emmy", "netflix", "disney", "spotify", "album", "box office", "celebrity", "taylor swift", "concert", "streaming", "tv show", "series", "music", "kanye", "drake", "beyonce", "marvel", "elon musk", "tweet", "tiktok", "youtube", "viral", "influencer"],
+  SCIENCE: ["climate", "space", "nasa", "mars", "ai ", "artificial intelligence", "vaccine", "pandemic", "research", "scientific", "quantum", "genome", "discovery", "species", "asteroid", "satellite"],
+  TECHNOLOGY: ["apple", "google", "microsoft", "openai", "chatgpt", "iphone", "tesla", "spacex", "startup", "ipo", "tech", "software", "chip", "semiconductor", "robot", "autonomous", "self-driving", "metaverse"],
+  BUSINESS: ["stock", "market cap", "revenue", "profit", "gdp", "inflation", "fed", "interest rate", "recession", "unemployment", "s&p", "dow jones", "nasdaq", "merger", "acquisition", "ipo", "earnings", "company", "ceo"],
+};
+
+export function detectCategory(title: string, sourceCategory?: string): string {
+  // Try source category first
+  if (sourceCategory) {
+    const catMap: Record<string, string> = { Politics: "POLITICS", Sports: "SPORTS", Crypto: "CRYPTO", "Pop Culture": "ENTERTAINMENT", Science: "SCIENCE", Tech: "TECHNOLOGY", Business: "BUSINESS" };
+    if (catMap[sourceCategory]) return catMap[sourceCategory];
+  }
+  // Keyword matching
+  const lower = title.toLowerCase();
+  let best = "OTHER", bestScore = 0;
+  for (const [cat, keywords] of Object.entries(CAT_KEYWORDS)) {
+    let score = 0;
+    for (const kw of keywords) { if (lower.includes(kw)) score++; }
+    if (score > bestScore) { bestScore = score; best = cat; }
+  }
+  return best;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Scheduled sync — runs daily at 6 AM UTC
@@ -774,8 +1135,7 @@ export const dailyMarketSync = functions.pubsub.schedule("every day 06:00").onRu
         const title = (m.question || "").trim();
         if (!title || existing.has(title.toLowerCase())) { skipped++; continue; }
         existing.add(title.toLowerCase());
-        const catMap: Record<string, string> = { Politics: "POLITICS", Sports: "SPORTS", Crypto: "CRYPTO", "Pop Culture": "ENTERTAINMENT", Science: "SCIENCE", Tech: "TECHNOLOGY", Business: "BUSINESS" };
-        const category = (m.category && catMap[m.category]) || "OTHER";
+        const category = detectCategory(title, m.category);
         let outcomes = ["Yes", "No"];
         try { outcomes = m.outcomes ? JSON.parse(m.outcomes) : outcomes; } catch {}
         await db.collection("proposals").add({
@@ -800,7 +1160,7 @@ export const dailyMarketSync = functions.pubsub.schedule("every day 06:00").onRu
         if (!title || existing.has(title.toLowerCase())) { skipped++; continue; }
         existing.add(title.toLowerCase());
         await db.collection("proposals").add({
-          title, description: null, category: "OTHER", outcomes: ["Yes", "No"],
+          title, description: null, category: detectCategory(title), outcomes: ["Yes", "No"],
           suggestedExpiry: m.closeTime ? new Date(m.closeTime).toISOString() : "",
           resolutionCriteria: "Source: Manifold Markets", status: "PENDING", upvotes: 0,
           createdById: botId, createdBy: { id: botId, displayName: "Predich Team" },
@@ -814,3 +1174,260 @@ export const dailyMarketSync = functions.pubsub.schedule("every day 06:00").onRu
   console.log(`Daily sync done: ${created} created, ${skipped} skipped`);
   return null;
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Automated Market Resolution — runs every 6 hours
+// Flags expired markets and auto-resolves binary markets past their expiry
+// ═══════════════════════════════════════════════════════════════════════════════
+export const autoResolveMarkets = functions.pubsub.schedule("every 6 hours").onRun(async () => {
+  console.log("Auto-resolve check started");
+  const now = new Date();
+  let flagged = 0, resolved = 0;
+
+  // Find OPEN markets with expiresAt in the past
+  const snap = await db.collection("markets")
+    .where("status", "==", "OPEN")
+    .get();
+
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    if (!d.expiresAt) continue;
+
+    // Parse expiry — handle both Timestamp and string
+    let expiryDate: Date;
+    if (d.expiresAt.toDate) {
+      expiryDate = d.expiresAt.toDate();
+    } else {
+      expiryDate = new Date(d.expiresAt);
+    }
+    if (isNaN(expiryDate.getTime()) || expiryDate > now) continue;
+
+    // Market is expired — flag it
+    const daysPastExpiry = (now.getTime() - expiryDate.getTime()) / (1000 * 60 * 60 * 24);
+
+    if (daysPastExpiry <= 7) {
+      // Within 7 days: just flag as PENDING_RESOLUTION for admin review
+      if (!d.pendingResolution) {
+        await doc.ref.update({
+          pendingResolution: true,
+          flaggedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        flagged++;
+      }
+    } else {
+      // Over 7 days past expiry with no admin action: auto-cancel and refund
+      // This prevents markets from being stuck open indefinitely
+      const holdingsSnap = await db.collection("holdings").where("marketId", "==", doc.id).get();
+
+      await db.runTransaction(async (tx) => {
+        tx.update(doc.ref, {
+          status: "CANCELLED",
+          cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+          cancellationReason: "Auto-cancelled: expired over 7 days with no resolution",
+        });
+
+        // Refund all holders based on their cost basis
+        for (const hDoc of holdingsSnap.docs) {
+          const h = hDoc.data();
+          if (h.quantity <= 0) continue;
+          const refund = Math.round((h.avgCost || 0) * h.quantity);
+          if (refund <= 0) continue;
+          const userRef = db.collection("users").doc(h.userId);
+          tx.update(userRef, {
+            creditBalance: admin.firestore.FieldValue.increment(refund),
+            totalCreditsEarned: admin.firestore.FieldValue.increment(refund),
+          });
+          tx.set(db.collection("transactions").doc(), {
+            userId: h.userId, amount: refund, type: "MARKET_CANCELLED_REFUND",
+            description: `Refund for cancelled market: ${d.title}`,
+            referenceId: doc.id,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      });
+      resolved++;
+    }
+  }
+
+  console.log(`Auto-resolve done: ${flagged} flagged, ${resolved} auto-cancelled`);
+  return null;
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Referral reward — called when a new user registers with a referral code
+// ═══════════════════════════════════════════════════════════════════════════════
+export const processReferral = functions.firestore
+  .document("users/{userId}")
+  .onCreate(async (snap) => {
+    const newUser = snap.data();
+    const referredBy = newUser.referredBy;
+    if (!referredBy) return;
+
+    const REFERRAL_REWARD = 500; // Both parties get 500 credits
+
+    // Find the referrer
+    const referrerSnap = await db.collection("users")
+      .where("referralCode", "==", referredBy)
+      .limit(1)
+      .get();
+
+    if (referrerSnap.empty) {
+      // Try matching by user ID prefix (fallback)
+      const allUsers = await db.collection("users").get();
+      const referrer = allUsers.docs.find(d => d.id.slice(0, 8).toUpperCase() === referredBy);
+      if (!referrer) return;
+      await grantReferralRewards(referrer.id, snap.id, REFERRAL_REWARD);
+    } else {
+      await grantReferralRewards(referrerSnap.docs[0].id, snap.id, REFERRAL_REWARD);
+    }
+  });
+
+async function grantReferralRewards(referrerId: string, newUserId: string, amount: number) {
+  const batch = db.batch();
+
+  // Grant credits to referrer
+  const referrerRef = db.collection("users").doc(referrerId);
+  batch.update(referrerRef, {
+    creditBalance: admin.firestore.FieldValue.increment(amount),
+    totalCreditsEarned: admin.firestore.FieldValue.increment(amount),
+    referralCount: admin.firestore.FieldValue.increment(1),
+  });
+  batch.set(db.collection("transactions").doc(), {
+    userId: referrerId, amount, type: "REFERRAL_REWARD",
+    description: "Referral reward: friend joined!",
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  // Grant credits to new user
+  const newUserRef = db.collection("users").doc(newUserId);
+  batch.update(newUserRef, {
+    creditBalance: admin.firestore.FieldValue.increment(amount),
+    totalCreditsEarned: admin.firestore.FieldValue.increment(amount),
+  });
+  batch.set(db.collection("transactions").doc(), {
+    userId: newUserId, amount, type: "REFERRAL_REWARD",
+    description: "Welcome bonus: referred by a friend!",
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  await batch.commit();
+  // Notify referrer
+  sendPushNotification(referrerId, "Referral Reward!", `A friend joined using your code! +${amount} credits`);
+  console.log(`Referral reward: ${amount} credits to both ${referrerId} and ${newUserId}`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tournament V2 Scheduler — runs every 15 minutes
+// - Transitions REGISTRATION → LOCKED when registration closes
+// - Resolves expired LOCKED tournaments via external APIs
+// - Cancels tournaments with <2 players
+// ═══════════════════════════════════════════════════════════════════════════════
+export const tournamentScheduler = functions.pubsub.schedule("every 15 minutes").onRun(async () => {
+  console.log("Tournament scheduler started");
+
+  // 1. Auto-create tournaments from templates
+  const createResult = await autoCreateTournaments();
+  console.log(`Auto-create: ${createResult.created} created, ${createResult.skipped} skipped`);
+
+  // 2. Update live values for tracker
+  const liveUpdated = await updateLiveValues();
+  console.log(`Live values updated: ${liveUpdated}`);
+
+  // 3. Send registration closing reminders (6h before close)
+  const regSnap = await db.collection("tournament_v2")
+    .where("status", "==", "REGISTRATION")
+    .get();
+  for (const doc of regSnap.docs) {
+    const t = doc.data();
+    const closeTime = new Date(t.registrationCloses).getTime();
+    const now = Date.now();
+    const hoursLeft = (closeTime - now) / (1000 * 60 * 60);
+    // Send reminder between 5.75h and 6h (so it triggers once per 15-min cycle)
+    if (hoursLeft > 5.75 && hoursLeft <= 6 && (t.playerCount || 0) > 0) {
+      const entries = await db.collection("tournament_entries")
+        .where("tournamentId", "==", doc.id)
+        .get();
+      for (const eDoc of entries.docs) {
+        sendPushNotification(eDoc.data().userId,
+          "Tournament Closing Soon!",
+          `"${t.question}" registration closes in 6h. ${t.playerCount} players competing.`
+        );
+      }
+    }
+  }
+
+  // 4. Update statuses (REGISTRATION → LOCKED, cancel if <2 players)
+  const statusResult = await updateTournamentStatuses();
+  console.log(`Statuses: ${statusResult.locked} locked, ${statusResult.cancelled} cancelled`);
+
+  // Send "locked" notification to participants
+  if (statusResult.locked > 0) {
+    const justLockedSnap = await db.collection("tournament_v2")
+      .where("status", "==", "LOCKED")
+      .get();
+    for (const doc of justLockedSnap.docs) {
+      const t = doc.data();
+      // Only notify if it was just locked (no lockedNotified flag)
+      if (t.lockedNotified) continue;
+      await doc.ref.update({ lockedNotified: true });
+      const entries = await db.collection("tournament_entries")
+        .where("tournamentId", "==", doc.id)
+        .get();
+      for (const eDoc of entries.docs) {
+        sendPushNotification(eDoc.data().userId,
+          "Predictions Locked!",
+          `"${t.question}" — ${t.playerCount} players competing. Results in ${t.type === "RAPID" ? "soon" : getTimeLabel(t.expiresAt)}.`
+        );
+      }
+    }
+  }
+
+  // 5. Resolve expired LOCKED tournaments
+  const now = new Date();
+  const lockedSnap = await db.collection("tournament_v2")
+    .where("status", "==", "LOCKED")
+    .get();
+
+  let resolved = 0;
+  for (const doc of lockedSnap.docs) {
+    const t = doc.data();
+    if (new Date(t.expiresAt) > now) continue;
+
+    const actualValue = await fetchCurrentPrice(t.asset, t.apiSource);
+    if (actualValue === null) {
+      console.error(`Failed to fetch actual value for tournament ${doc.id} (${t.asset})`);
+      continue;
+    }
+
+    try {
+      await resolveTournament(doc.id, actualValue);
+      const entries = await db.collection("tournament_entries")
+        .where("tournamentId", "==", doc.id)
+        .get();
+      for (const eDoc of entries.docs) {
+        const e = eDoc.data();
+        const msg = e.payout && e.payout > 0
+          ? `You placed #${e.rank}! Won ${e.payout} credits`
+          : `You placed #${e.rank}. Better luck next time!`;
+        sendPushNotification(e.userId, "Tournament Results!", msg);
+      }
+      resolved++;
+    } catch (e: any) {
+      console.error(`Failed to resolve tournament ${doc.id}:`, e.message);
+    }
+  }
+
+  console.log(`Tournament scheduler done: ${resolved} resolved`);
+  return null;
+});
+
+function getTimeLabel(dateStr: string): string {
+  const diff = new Date(dateStr).getTime() - Date.now();
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  if (days > 0) return `${days}d ${hours}h`;
+  return `${hours}h`;
+}
+
+// ─── External API value fetcher ─────────────────────────────────────────────
+// fetchActualValue removed — replaced by fetchCurrentPrice from tournaments.ts
