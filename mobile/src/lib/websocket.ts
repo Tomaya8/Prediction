@@ -20,13 +20,17 @@ class WebSocketService {
   private disconnectHandlers: ConnectionHandler[] = [];
   private isConnecting = false;
 
+  private disabled = false;
+
   constructor(url: string = '') {
-    // Use environment variable or default to localhost for development
-    this.url = url || process.env.EXPO_PUBLIC_WS_URL || 'ws://localhost:3001/ws';
+    // Use environment variable or default — disabled if no WS URL configured
+    this.url = url || process.env.EXPO_PUBLIC_WS_URL || '';
+    if (!this.url) this.disabled = true;
   }
 
   // Connect to WebSocket server
   connect(token?: string): void {
+    if (this.disabled) return; // No WebSocket server configured
     if (this.ws?.readyState === WebSocket.OPEN || this.isConnecting) {
       console.log('WebSocket already connected or connecting');
       return;

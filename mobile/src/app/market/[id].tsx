@@ -330,46 +330,27 @@ export default function MarketDetailScreen() {
     );
   }
 
+  const [showFullDescription, setShowFullDescription] = useState(false);
+  const hasLongDescription = (market.description || '').length > 100;
+
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
       <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
-        {/* Market Header */}
+        {/* Compact Header — title + key info only */}
         <View style={styles.header}>
-          <View style={styles.categoryBadge}>
-            <Text style={styles.categoryText}>{market.category}</Text>
+          <View style={styles.headerTopRow}>
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryText}>{market.category}</Text>
+            </View>
+            <Text style={styles.expiryText}>
+              Expires {new Date(market.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </Text>
           </View>
           <Text style={styles.title}>{market.title}</Text>
-          <Text style={styles.description}>{market.description}</Text>
-          {(market as any).createdBy?.displayName && (
-            <Text style={styles.proposedBy}>
-              Proposed by {(market as any).createdBy.displayName}
-            </Text>
-          )}
+          <Text style={styles.volumeText}>{market.totalVolume.toLocaleString()} credits traded</Text>
         </View>
 
-        {/* Market Info */}
-        <View style={styles.infoSection}>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>📊 Total Volume</Text>
-            <Text style={styles.infoValue}>{market.totalVolume.toLocaleString()} credits</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>📅 Expires</Text>
-            <Text style={styles.infoValue}>
-              {new Date(market.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </Text>
-          </View>
-        </View>
-
-        {/* Price History Chart */}
-        {priceHistory.length > 1 && (
-          <View style={styles.chartSection}>
-            <Text style={styles.chartTitle}>Price History</Text>
-            <PriceChart data={priceHistory} />
-          </View>
-        )}
-
-        {/* Trading Section */}
+        {/* Trading Section — THE HEART OF THE PAGE */}
         <View style={styles.tradingSection}>
           <Text style={styles.sectionTitle}>Trade</Text>
 
@@ -519,23 +500,31 @@ export default function MarketDetailScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Challenge a Friend */}
-        <TouchableOpacity
-          style={styles.challengeSection}
-          onPress={() => {
-            router.back();
-            setTimeout(() => router.push('/(tabs)/friends'), 100);
-          }}
-        >
-          <View style={styles.challengeLeft}>
-            <Text style={styles.challengeIcon}>🎯</Text>
-            <View>
-              <Text style={styles.challengeTitle}>Challenge a Friend</Text>
-              <Text style={styles.challengeSubtitle}>Bet against a friend on this market</Text>
-            </View>
+        {/* Price History Chart — below trade */}
+        {priceHistory.length > 1 && (
+          <View style={styles.chartSection}>
+            <Text style={styles.chartTitle}>Price History</Text>
+            <PriceChart data={priceHistory} />
           </View>
-          <Text style={styles.challengeArrow}>›</Text>
-        </TouchableOpacity>
+        )}
+
+        {/* Description — collapsed with Read More */}
+        {market.description ? (
+          <View style={styles.descriptionSection}>
+            <Text style={styles.descriptionTitle}>About This Market</Text>
+            <Text style={styles.description} numberOfLines={showFullDescription ? undefined : 3}>
+              {market.description}
+            </Text>
+            {hasLongDescription && (
+              <TouchableOpacity onPress={() => setShowFullDescription(!showFullDescription)}>
+                <Text style={styles.readMoreText}>{showFullDescription ? 'Show less' : 'Read more'}</Text>
+              </TouchableOpacity>
+            )}
+            {(market as any).createdBy?.displayName && (
+              <Text style={styles.proposedBy}>Proposed by {(market as any).createdBy.displayName}</Text>
+            )}
+          </View>
+        ) : null}
 
         {/* Disclaimer */}
         <View style={styles.disclaimer}>
@@ -877,5 +866,36 @@ function createStyles() { return StyleSheet.create({
     fontSize: FontSize.lg,
     fontWeight: '700',
     marginBottom: Spacing.md,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  expiryText: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+  },
+  volumeText: {
+    fontSize: FontSize.sm,
+    color: Colors.textMuted,
+    marginTop: Spacing.xs,
+  },
+  descriptionSection: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  descriptionTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: Spacing.sm,
+  },
+  readMoreText: {
+    fontSize: FontSize.md,
+    color: Colors.primary,
+    fontWeight: '600',
+    marginTop: Spacing.sm,
   },
 }); }

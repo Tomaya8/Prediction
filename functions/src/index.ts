@@ -9,6 +9,8 @@ import * as jwt from "jsonwebtoken";
 import { z } from "zod";
 import { handleAdminRoute } from "./admin";
 import { handleTournamentRoute, handleTournamentAdminRoute, resolveTournament, updateTournamentStatuses, autoCreateTournaments, updateLiveValues, fetchCurrentPrice } from "./tournaments";
+import { botEnterTournaments, botTrade } from "./bots";
+import { handleVersusRoute, autoCreateVersusMatchups, resolveVersusMatchups } from "./versus";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -556,6 +558,23 @@ export const api = functions.https.onRequest(async (req, res) => {
       ok(res, { message: "Profile updated" }); return;
     }
 
+    // ── CHANGE PASSWORD ──────────────────────────────────────────────
+    if (path === "/users/me/password" && method === "PUT") {
+      const user = await auth(req);
+      if (!user) { fail(res, "Auth required", 401); return; }
+      const { currentPassword, newPassword } = req.body;
+      if (!currentPassword || !newPassword) { fail(res, "Current and new password required"); return; }
+      if (newPassword.length < 6) { fail(res, "New password must be at least 6 characters"); return; }
+      const userDoc = await db.collection("users").doc(user.id).get();
+      if (!userDoc.exists) { fail(res, "User not found", 404); return; }
+      const ud = userDoc.data()!;
+      if (!ud.passwordHash) { fail(res, "Account uses social login — no password to change"); return; }
+      if (!(await bcrypt.compare(currentPassword, ud.passwordHash))) { fail(res, "Current password is incorrect", 401); return; }
+      const newHash = await bcrypt.hash(newPassword, 10);
+      await db.collection("users").doc(user.id).update({ passwordHash: newHash });
+      ok(res, { message: "Password changed successfully" }); return;
+    }
+
     if (path === "/users/me/transactions" && method === "GET") {
       const user = await auth(req);
       if (!user) { fail(res, "Auth required", 401); return; }
@@ -1002,6 +1021,16 @@ export const api = functions.https.onRequest(async (req, res) => {
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // VERSUS (comparative asset predictions)
+    // ═══════════════════════════════════════════════════════════════════
+
+    if (path.startsWith("/versus")) {
+      const user = await auth(req);
+      const versusResult = await handleVersusRoute(path, method, req.body, user?.id || null);
+      if (versusResult) { send(res, versusResult.status, versusResult.body); return; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // TOURNAMENTS V2
     // ═══════════════════════════════════════════════════════════════════
 
@@ -1040,38 +1069,8 @@ export const api = functions.https.onRequest(async (req, res) => {
 });
 // v1.3.0 — Node.js 22
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Push Notifications — uses Expo Push API (free, no FCM setup needed)
-// ═══════════════════════════════════════════════════════════════════════════════
-async function sendPushNotification(userId: string, title: string, body: string, data?: Record<string, string>): Promise<void> {
-  try {
-    const userDoc = await db.collection("users").doc(userId).get();
-    if (!userDoc.exists) return;
-    const pushToken = userDoc.data()!.pushToken;
-    if (!pushToken || !pushToken.startsWith("ExponentPushToken[")) return;
-
-    await fetch("https://exp.host/--/api/v2/push/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        to: pushToken,
-        title,
-        body,
-        data: data || {},
-        sound: "default",
-      }),
-    });
-  } catch (e: any) {
-    console.error("Push notification failed:", e.message);
-  }
-}
-
-// Send notifications to all holders of a market
-async function notifyMarketHolders(marketId: string, title: string, body: string): Promise<void> {
-  const holdings = await db.collection("holdings").where("marketId", "==", marketId).get();
-  const userIds = [...new Set(holdings.docs.map(d => d.data().userId))];
-  await Promise.all(userIds.map(uid => sendPushNotification(uid, title, body, { marketId })));
-}
+// Push Notifications — imported from shared module
+import { sendPushNotification, notifyMarketHolders } from "./notifications";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Smart category detection from title keywords
@@ -1322,7 +1321,7 @@ async function grantReferralRewards(referrerId: string, newUserId: string, amoun
 // - Resolves expired LOCKED tournaments via external APIs
 // - Cancels tournaments with <2 players
 // ═══════════════════════════════════════════════════════════════════════════════
-export const tournamentScheduler = functions.pubsub.schedule("every 15 minutes").onRun(async () => {
+export const tournamentScheduler = functions.runWith({ timeoutSeconds: 300, memory: "512MB" }).pubsub.schedule("every 15 minutes").onRun(async () => {
   console.log("Tournament scheduler started");
 
   // 1. Auto-create tournaments from templates
@@ -1360,27 +1359,7 @@ export const tournamentScheduler = functions.pubsub.schedule("every 15 minutes")
   const statusResult = await updateTournamentStatuses();
   console.log(`Statuses: ${statusResult.locked} locked, ${statusResult.cancelled} cancelled`);
 
-  // Send "locked" notification to participants
-  if (statusResult.locked > 0) {
-    const justLockedSnap = await db.collection("tournament_v2")
-      .where("status", "==", "LOCKED")
-      .get();
-    for (const doc of justLockedSnap.docs) {
-      const t = doc.data();
-      // Only notify if it was just locked (no lockedNotified flag)
-      if (t.lockedNotified) continue;
-      await doc.ref.update({ lockedNotified: true });
-      const entries = await db.collection("tournament_entries")
-        .where("tournamentId", "==", doc.id)
-        .get();
-      for (const eDoc of entries.docs) {
-        sendPushNotification(eDoc.data().userId,
-          "Predictions Locked!",
-          `"${t.question}" — ${t.playerCount} players competing. Results in ${t.type === "RAPID" ? "soon" : getTimeLabel(t.expiresAt)}.`
-        );
-      }
-    }
-  }
+  // Notifications for locked/cancelled are now handled inside updateTournamentStatuses()
 
   // 5. Resolve expired LOCKED tournaments
   const now = new Date();
@@ -1389,45 +1368,81 @@ export const tournamentScheduler = functions.pubsub.schedule("every 15 minutes")
     .get();
 
   let resolved = 0;
-  for (const doc of lockedSnap.docs) {
-    const t = doc.data();
-    if (new Date(t.expiresAt) > now) continue;
+  const expiredTournaments = lockedSnap.docs.filter(d => new Date(d.data().expiresAt) <= now);
+  console.log(`Found ${expiredTournaments.length} expired LOCKED tournaments to resolve`);
 
-    const actualValue = await fetchCurrentPrice(t.asset, t.apiSource);
+  for (const doc of expiredTournaments) {
+    const t = doc.data();
+    console.log(`Resolving tournament ${doc.id}: asset=${t.asset}, apiSource=${t.apiSource}`);
+
+    // Try fetching price with retry (CoinGecko rate limits)
+    let actualValue: number | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      actualValue = await fetchCurrentPrice(t.asset, t.apiSource);
+      if (actualValue !== null) break;
+      console.log(`Fetch attempt ${attempt + 1} failed for ${t.asset}, retrying in 2s...`);
+      await new Promise(r => setTimeout(r, 2000));
+    }
+
+    // Fallback: use the last known live value
+    if (actualValue === null && t.currentLiveValue) {
+      console.log(`Using last known live value: ${t.currentLiveValue}`);
+      actualValue = t.currentLiveValue;
+    }
+
     if (actualValue === null) {
-      console.error(`Failed to fetch actual value for tournament ${doc.id} (${t.asset})`);
+      console.error(`FAILED to get value for tournament ${doc.id} (${t.asset}) after 3 attempts`);
       continue;
     }
 
     try {
+      console.log(`Resolving ${doc.id} with actual value: ${actualValue}`);
       await resolveTournament(doc.id, actualValue);
+      // Re-read entries after resolution (they now have rank/payout)
       const entries = await db.collection("tournament_entries")
         .where("tournamentId", "==", doc.id)
         .get();
       for (const eDoc of entries.docs) {
         const e = eDoc.data();
+        if (!e.rank) continue;
         const msg = e.payout && e.payout > 0
           ? `You placed #${e.rank}! Won ${e.payout} credits`
           : `You placed #${e.rank}. Better luck next time!`;
         sendPushNotification(e.userId, "Tournament Results!", msg);
       }
       resolved++;
+      console.log(`Tournament ${doc.id} resolved successfully`);
     } catch (e: any) {
       console.error(`Failed to resolve tournament ${doc.id}:`, e.message);
     }
   }
 
   console.log(`Tournament scheduler done: ${resolved} resolved`);
+
+  // 6. Versus matchups — auto-create and resolve
+  try {
+    const versusCreated = await autoCreateVersusMatchups();
+    console.log(`Versus: ${versusCreated.created} matchups created`);
+    const versusResolved = await resolveVersusMatchups();
+    console.log(`Versus: ${versusResolved.resolved} matchups resolved`);
+  } catch (e: any) {
+    console.error("Versus error:", e.message);
+  }
+
+  // 7. Bot activity — enter tournaments and trade on markets
+  try {
+    const botTournamentResult = await botEnterTournaments();
+    console.log(`Bots entered ${botTournamentResult.entered} tournaments`);
+    const botTradeResult = await botTrade();
+    console.log(`Bots made ${botTradeResult.trades} trades`);
+  } catch (e: any) {
+    console.error("Bot activity error:", e.message);
+  }
+
   return null;
 });
 
-function getTimeLabel(dateStr: string): string {
-  const diff = new Date(dateStr).getTime() - Date.now();
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  if (days > 0) return `${days}d ${hours}h`;
-  return `${hours}h`;
-}
+// getTimeLabel removed — notifications now handled in tournaments.ts
 
 // ─── External API value fetcher ─────────────────────────────────────────────
 // fetchActualValue removed — replaced by fetchCurrentPrice from tournaments.ts

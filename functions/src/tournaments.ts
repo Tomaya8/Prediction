@@ -11,6 +11,7 @@
 
 import * as admin from "firebase-admin";
 import { z } from "zod";
+import { sendPushNotification, notifyTournamentParticipants } from "./notifications";
 
 function getDb() { return admin.firestore(); }
 
@@ -74,10 +75,15 @@ function getMultipliers(playerCount: number): { ranks: number[]; multipliers: nu
     return { ranks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], multipliers: [8, 4, 2.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5] };
   }
   if (playerCount >= 20) {
-    return { ranks: [1, 2, 3, 4, 5], multipliers: [5, 3, 2, 1.5, 1.5] };
+    // 20+ players: top 3 share ~80% of distributable pool
+    return { ranks: [1, 2, 3], multipliers: [8, 5, 3] };
   }
-  // 10-19 players
-  return { ranks: [1, 2, 3], multipliers: [3, 2, 1.5] };
+  if (playerCount >= 10) {
+    // 10-19: top 3 get most of the pool
+    return { ranks: [1, 2, 3], multipliers: [6, 3.5, 2] };
+  }
+  // 2-9 players: top 2 split
+  return { ranks: [1, 2], multipliers: [5, 3] };
 }
 
 function calculatePayouts(
@@ -143,6 +149,7 @@ function tournamentToResponse(doc: admin.firestore.DocumentSnapshot): any {
     actualValue: d.actualValue ?? null,
     templateId: d.templateId || null,
     payoutTable: payouts,
+    minPlayers: 2,
     createdAt: d.createdAt?.toDate?.()?.toISOString() || null,
   };
 }
@@ -182,13 +189,23 @@ export async function handleTournamentRoute(
         const e = d.data();
         myEntries[e.tournamentId] = {
           prediction: e.prediction,
+          rank: e.rank ?? null,
+          payout: e.payout ?? null,
           enteredAt: e.enteredAt?.toDate?.()?.toISOString() || null,
         };
       });
     }
 
+    // Recent resolved/cancelled — separate from active tournaments
+    const recentSnap = await db.collection("tournament_v2")
+      .where("status", "in", ["RESOLVED", "CANCELLED"])
+      .limit(5)
+      .get();
+    const recentResults = recentSnap.docs.map(d => tournamentToResponse(d));
+
     return ok({
       tournaments,
+      recentResults,
       myEntries,
     });
   }
@@ -559,6 +576,21 @@ export async function resolveTournament(tournamentId: string, actualValue: numbe
   });
 
   await batch.commit();
+
+  // Notify all participants with their results
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const rank = i + 1;
+    const payout = payoutMap.get(rank) || 0;
+    let msg: string;
+    if (rank === 1) msg = `You won 1st place! +${payout} credits`;
+    else if (rank === 2) msg = `You placed 2nd! +${payout} credits`;
+    else if (rank === 3) msg = `You placed 3rd! +${payout} credits`;
+    else if (payout > 0) msg = `You placed #${rank} and won ${payout} credits!`;
+    else msg = `You placed #${rank} of ${entries.length}. Better luck next time!`;
+    sendPushNotification(entry.userId, "Tournament Results!", msg, { tournamentId });
+  }
+
   console.log(`Tournament ${tournamentId} resolved: actual=${actualValue}, ${entries.length} entries, ${payouts.length} winners`);
 }
 
@@ -603,9 +635,22 @@ export async function updateTournamentStatuses(): Promise<{ locked: number; canc
           }
         }
         await batch.commit();
+        // Notify participants about cancellation + refund
+        for (const eDoc of entries.docs) {
+          sendPushNotification(eDoc.data().userId,
+            "Tournament Cancelled",
+            `"${t.question}" was cancelled (not enough players). Your ${t.entryFee} credits have been refunded.`,
+            { tournamentId: doc.id }
+          );
+        }
         cancelled++;
       } else {
         await doc.ref.update({ status: "LOCKED" });
+        // Notify participants that predictions are locked
+        notifyTournamentParticipants(doc.id,
+          "Predictions Locked!",
+          `"${t.question}" — ${t.playerCount} players competing.`
+        );
         locked++;
       }
     }
@@ -700,29 +745,37 @@ export async function autoCreateTournaments(): Promise<{ created: number; skippe
     return { created: 0, skipped: 0 };
   }
 
-  // Count active tournaments per type
+  // Count active tournaments per type AND track existing asset+type combos for dedup
   const activeSnap = await db.collection("tournament_v2")
     .where("status", "in", ["REGISTRATION", "LOCKED"])
     .get();
 
   const activeCounts: Record<string, number> = { MONTHLY: 0, WEEKLY: 0, RAPID: 0 };
+  const existingAssetKeys = new Set<string>();
   activeSnap.docs.forEach(d => {
-    const type = d.data().type;
-    activeCounts[type] = (activeCounts[type] || 0) + 1;
+    const data = d.data();
+    activeCounts[data.type] = (activeCounts[data.type] || 0) + 1;
+    // Dedup key: type + asset (prevents 8 identical "BTC monthly" tournaments)
+    existingAssetKeys.add(`${data.type}_${data.asset}`);
   });
 
-  // Target counts per type
-  const TARGET = { MONTHLY: 10, WEEKLY: 5, RAPID: 5 };
+  // Fix 1: Reduced targets — 1 rapid per cycle for testing
+  const TARGET: Record<string, number> = { MONTHLY: 2, WEEKLY: 2, RAPID: 1 };
+
+  // Get bot users for pre-seeding (Fix 4)
+  const botSnap = await db.collection("users").where("isBot", "==", true).get();
+  const botUsers = botSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
   for (const tDoc of templatesSnap.docs) {
     const template = tDoc.data() as Template;
     const type = template.type;
 
-    // Skip if we have enough active tournaments of this type
-    if (activeCounts[type] >= (TARGET[type] || 5)) {
-      skipped++;
-      continue;
-    }
+    // Fix 1: Skip if we have enough active tournaments of this type
+    if (activeCounts[type] >= (TARGET[type] ?? 2)) { skipped++; continue; }
+
+    // Fix 2: Skip if there's already an active tournament for this asset+type
+    const dedupKey = `${type}_${template.asset}`;
+    if (existingAssetKeys.has(dedupKey)) { skipped++; continue; }
 
     // Fetch current price for the asset
     const currentPrice = await fetchCurrentPrice(template.asset, template.apiSource);
@@ -742,7 +795,8 @@ export async function autoCreateTournaments(): Promise<{ created: number; skippe
       const cfg = TYPE_CONFIG.RAPID;
       registrationCloses = new Date(now.getTime() + cfg.registrationMinutes * 60 * 1000);
       expiresAt = new Date(now.getTime() + cfg.totalMinutes * 60 * 1000);
-      dateLabel = `${expiresAt.getUTCHours().toString().padStart(2, "0")}:${expiresAt.getUTCMinutes().toString().padStart(2, "0")} UTC today`;
+      const hours = Math.round(cfg.totalMinutes / 60);
+      dateLabel = `in ${hours} hour${hours > 1 ? "s" : ""}`;
     } else {
       const cfg = type === "MONTHLY" ? TYPE_CONFIG.MONTHLY : TYPE_CONFIG.WEEKLY;
       registrationCloses = new Date(now.getTime() + cfg.registrationDays * 24 * 60 * 60 * 1000);
@@ -756,12 +810,23 @@ export async function autoCreateTournaments(): Promise<{ created: number; skippe
       .replace("{date}", dateLabel)
       .replace("{price}", `${template.unit}${currentPrice.toLocaleString()}`);
 
-    // Historical range (±15% for crypto, ±5% for forex)
     const rangePercent = template.apiSource === "exchangerate" ? 0.05 : 0.15;
     const historicalLow = Math.round(currentPrice * (1 - rangePercent) * 100) / 100;
     const historicalHigh = Math.round(currentPrice * (1 + rangePercent) * 100) / 100;
+    const entryFee = template.entryFee || 100;
+    const rakePercent = template.rakePercent || TYPE_CONFIG[type === "MONTHLY" ? "MONTHLY" : "WEEKLY"].rakeDefault;
 
-    await db.collection("tournament_v2").add({
+    // Fix 4: Pre-seed 3-5 bot entries at creation so tournament never shows "0 players"
+    const botsToSeed = Math.min(3 + Math.floor(Math.random() * 3), botUsers.length); // 3-5 bots
+    const selectedBots = botUsers
+      .filter(b => (b as any).creditBalance >= entryFee)
+      .sort(() => Math.random() - 0.5)
+      .slice(0, botsToSeed);
+
+    const tournamentRef = db.collection("tournament_v2").doc();
+    const batch = db.batch();
+
+    batch.set(tournamentRef, {
       type,
       category: template.category,
       status: "REGISTRATION",
@@ -770,12 +835,13 @@ export async function autoCreateTournaments(): Promise<{ created: number; skippe
       asset: template.asset,
       apiSource: template.apiSource,
       currentValueAtCreation: currentPrice,
+      currentLiveValue: currentPrice,
       historicalLow,
       historicalHigh,
-      entryFee: template.entryFee,
-      rakePercent: template.rakePercent || TYPE_CONFIG[type === "RAPID" ? "RAPID" : type === "MONTHLY" ? "MONTHLY" : "WEEKLY"].rakeDefault,
-      prizePool: 0,
-      playerCount: 0,
+      entryFee,
+      rakePercent,
+      prizePool: selectedBots.length * entryFee,
+      playerCount: selectedBots.length,
       maxPlayers: template.maxPlayers || 200,
       registrationOpens: now.toISOString(),
       registrationCloses: registrationCloses.toISOString(),
@@ -784,11 +850,56 @@ export async function autoCreateTournaments(): Promise<{ created: number; skippe
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
+    // Create bot entries
+    for (const bot of selectedBots) {
+      const isSpecialist = (template as any).specialty
+        ? (template as any).specialty.includes(template.category)
+        : false;
+      const style = ["conservative", "moderate", "aggressive"][Math.floor(Math.random() * 3)] as any;
+      const prediction = generateBotPrediction(currentPrice, style, isSpecialist, type);
+
+      batch.set(db.collection("tournament_entries").doc(`${bot.id}_${tournamentRef.id}`), {
+        tournamentId: tournamentRef.id,
+        userId: bot.id,
+        displayName: (bot as any).displayName || "Player",
+        prediction,
+        enteredAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Deduct entry fee from bot
+      batch.update(db.collection("users").doc(bot.id), {
+        creditBalance: admin.firestore.FieldValue.increment(-entryFee),
+        totalCreditsSpent: admin.firestore.FieldValue.increment(entryFee),
+      });
+    }
+
+    await batch.commit();
+    existingAssetKeys.add(dedupKey);
     activeCounts[type]++;
     created++;
   }
 
   return { created, skipped };
+}
+
+// Bot prediction generator (used during pre-seeding)
+function generateBotPrediction(
+  currentValue: number,
+  style: "conservative" | "moderate" | "aggressive",
+  isSpecialist: boolean,
+  type: string
+): number {
+  let baseVariance = type === "MONTHLY" ? 0.08 : type === "WEEKLY" ? 0.03 : 0.005;
+  const styleMultiplier = style === "conservative" ? 0.6 : style === "aggressive" ? 1.5 : 1.0;
+  const specialistMultiplier = isSpecialist ? 0.7 : 1.0;
+  const variance = baseVariance * styleMultiplier * specialistMultiplier;
+  const bias = (Math.random() - 0.5) * 0.3;
+  const noise = (Math.random() - 0.5) * 2;
+  const change = currentValue * variance * (noise + bias);
+  const prediction = currentValue + change;
+  if (currentValue > 1000) return Math.round(prediction);
+  if (currentValue > 10) return Math.round(prediction * 100) / 100;
+  return Math.round(prediction * 10000) / 10000;
 }
 
 /**

@@ -7,24 +7,25 @@ Predich is a virtual credit prediction market and tournament app. Users trade on
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              CLIENT LAYER                                    │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
-│  │  Markets     │  │  Trading     │  │  Tournaments │  │  Profile     │   │
-│  │  (Browse)    │  │  (Buy/Sell)  │  │  (Predict)   │  │  (Stats)     │   │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘   │
-│         └──────────────────┴─────────────────┴─────────────────┘           │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │
+│  │ Markets  │ │ Trading  │ │Tournaments│ │  Versus  │ │ Profile  │       │
+│  │ (Browse) │ │(Buy/Sell)│ │ (Predict) │ │(Compare) │ │ (Stats)  │       │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘       │
+│       └─────────────┴────────────┴─────────────┴────────────┘             │
 │                     React Native (Expo SDK 52)                              │
 └─────────────────────────────────────────────────────────────────────────────┘
           │
           ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                      Firebase Cloud Functions (Node.js 22)                    │
-│  ┌─────────┐ ┌─────────┐ ┌────────────┐ ┌──────────────┐ ┌────────────┐  │
-│  │  Auth   │ │ Markets │ │  Trading   │ │ Tournaments  │ │   Admin    │  │
-│  │  (JWT)  │ │ (CRUD)  │ │  (LMSR)   │ │  V2 (Numeric)│ │  (Manage)  │  │
-│  └─────────┘ └─────────┘ └────────────┘ └──────────────┘ └────────────┘  │
+│  ┌───────┐ ┌───────┐ ┌────────┐ ┌────────────┐ ┌────────┐ ┌───────┐     │
+│  │ Auth  │ │Markets│ │Trading │ │Tournaments │ │ Versus │ │ Admin │     │
+│  │ (JWT) │ │(CRUD) │ │(LMSR)  │ │V2 (Numeric)│ │(Compar)│ │(Manage│     │
+│  └───────┘ └───────┘ └────────┘ └────────────┘ └────────┘ └───────┘     │
 │  ┌──────────────────────────────────────────────────────────────────────┐  │
 │  │              Scheduled Functions                                      │  │
 │  │  dailyMarketSync | autoResolveMarkets | tournamentScheduler          │  │
+│  │  (tournamentScheduler also handles bot activity + versus resolution) │  │
 │  └──────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────┘
           │
@@ -99,6 +100,8 @@ Predich is a virtual credit prediction market and tournament app. Users trade on
 | `tournament_templates` | Auto-creation templates |
 | `rate_limits` | Firestore-backed rate limiting |
 | `user_achievements` | Earned achievement records |
+| `versus` | Comparative asset matchups (A vs B) |
+| `versus_picks` | User picks on versus matchups |
 
 ---
 
@@ -111,7 +114,8 @@ Single HTTP function handling all REST endpoints. Routes:
 - `/trades/*` — Preview, execute, sell, portfolio
 - `/users/*` — Profile, transactions, daily reward, ad reward, achievements, search, credit packs, account deletion
 - `/leaderboard` — Global rankings
-- `/social/*` — Friends, follow/unfollow, referrals, challenges
+- `/versus/*` — List matchups, pick a side, matchup detail
+- `/social/*` — Follow/unfollow, referrals
 - `/proposals/*` — Submit, list, vote
 - `/tournaments` — Legacy tournament list
 - `/tournaments-v2/*` — Numeric prediction tournaments (list, detail, enter, edit, tracker, results)
@@ -122,7 +126,7 @@ Single HTTP function handling all REST endpoints. Routes:
 |----------|----------|---------|
 | `dailyMarketSync` | Daily 6 AM UTC | Scrapes Polymarket + Manifold for new market proposals |
 | `autoResolveMarkets` | Every 6 hours | Flags/cancels expired LMSR markets, refunds holders |
-| `tournamentScheduler` | Every 15 minutes | Auto-creates tournaments from templates, updates live prices, transitions statuses, auto-resolves expired tournaments, sends push notifications |
+| `tournamentScheduler` | Every 15 minutes | Auto-creates tournaments from templates, updates live prices, transitions statuses, auto-resolves expired tournaments, sends push notifications. Also: bot entry into tournaments, bot LMSR trading, versus matchup auto-creation (BTC vs ETH, BTC vs SOL, ETH vs SOL, EUR vs GBP), versus auto-resolution. 5-min timeout, 512MB memory, retry logic. |
 
 ### Triggers
 | Function | Trigger | Purpose |
@@ -145,6 +149,25 @@ Single HTTP function handling all REST endpoints. Routes:
 - Closest guess wins, ranked by `|prediction - actual|`
 - Multiplied payouts: up to 10x for Rapid, 5x Weekly, 2x Monthly
 - Auto-resolved via external APIs (CoinGecko, ExchangeRate)
+
+### 3. Versus System (Comparative Predictions)
+- "Which asset will perform better?" — users pick Asset A or Asset B
+- Fixed odds payout against the house (not peer-to-peer)
+- Dynamic odds calculated from 7d/30d momentum using sigmoid function with 15% house edge
+- Auto-generated market insights from real price data
+- Auto-created matchups via scheduler (BTC vs ETH, BTC vs SOL, ETH vs SOL, EUR vs GBP)
+- Auto-resolution: compares % change of both assets at expiry
+- Payout: winners get entry fee x odds, losers lose entry fee, ties refund
+- Dark "trading terminal" card design, distinct from rest of app
+- Push notifications for win/loss/tie results
+
+### Bot System (20 House Users)
+- 20 bot users with realistic names, trading styles (conservative/moderate/aggressive), and asset specialties
+- Bots auto-enter tournaments with realistic predictions based on style + domain expertise
+- Bots auto-trade on LMSR markets creating volume and price movement
+- Bot users created via batch write, auto-topped up when credits low
+- All bot activity runs in `tournamentScheduler` (every 15 min)
+- Bots have `isBot: true` flag in Firestore
 
 ### Tournament Lifecycle
 ```
@@ -172,6 +195,9 @@ Next tournament auto-created from same template
 | Weekly | 7 days | First 2 days | 75-100 credits | 5x | 15% |
 | Rapid | 2 hours | First 30 min | 25 credits | 10x | 20% |
 
+### Tournament Payout Scaling (Small Tournaments)
+For tournaments with 10-19 players: 6x / 3.5x / 2x (1st / 2nd / 3rd)
+
 ---
 
 ## Security
@@ -182,6 +208,9 @@ Next tournament auto-created from same template
 - **Auth**: JWT with 30-day expiry, bcrypt password hashing
 - **Account Deletion**: Full data wipe across all collections (App Store compliant)
 - **Firestore Rules**: Client access denied on sensitive collections (rate_limits)
+- **Push Notifications**: Shared module extracted to `/functions/src/notifications.ts`
+- **WebSocket**: Disabled (Cloud Functions don't support it) — no more error toasts
+- **Firestore Transactions**: Bot trading fixed (reads before writes)
 
 ---
 
@@ -221,20 +250,29 @@ Next tournament auto-created from same template
 
 ---
 
-## Mobile App Screens (13)
+## Mobile App Screens (14)
 
 | Screen | Tab | Description |
 |--------|-----|-------------|
 | Markets | Bottom tab | Browse, search, filter by category, tournament banner |
-| Portfolio | Bottom tab | Active/resolved holdings, P&L |
+| Portfolio | Bottom tab | 3 sections: Market Trades + Versus Picks + Tournament Entries. Versus picks show asset colors, odds, win/loss/active status. Tournament entries show prediction, rank, payout. |
 | Rankings | Bottom tab | Global leaderboard, follow users |
 | Profile | Bottom tab | Stats, streaks, store link |
-| Market Detail | Stack | Price chart, buy/sell, comments |
+| Market Detail | Stack | Trade section at top, compact header (title + category + expiry), collapsed description with "Read more" (3 lines default), chart below trade section, comments. "Challenge a Friend" removed. |
 | Tournaments | Hamburger | V2 tournament list (Rapid/Weekly/Monthly) + entry/tracker/results modals |
-| Friends | Hamburger | Friends list, challenges, referral code |
+| Versus | Hamburger | Comparative asset predictions ("Which will perform better?"). Dark trading terminal card design, dynamic odds, auto-created matchups. Replaced old "Friends & Challenges" screen. |
 | Transactions | Hamburger | Credit history |
 | Achievements | Hamburger | Badges |
 | Create Market | Hamburger | Propose new markets (50 credit fee) |
 | Credit Store | Hamburger | IAP packs, RevenueCat paywall, ad rewards |
-| Settings | Hamburger | Dark mode (reactive), notifications, account deletion |
+| Settings | Hamburger | Dark mode, notifications, edit profile, change password, email settings, help center, terms/privacy links, account deletion |
 | Auth | Stack | Sign in / sign up with referral code |
+| Settings Sub-pages | Stack | Edit Profile (change username), Change Password (current + new + confirm, bcrypt), Email Settings (read-only email + 3 notification toggles), Help Center (9 FAQ + contact support) |
+
+### Settings Pages Detail
+- **Edit Profile**: change username, saves to backend
+- **Change Password**: current + new + confirm, bcrypt verification
+- **Email Settings**: shows email (read-only), 3 notification toggles
+- **Help Center**: in-app FAQ with 9 expandable questions + contact support
+- **Terms of Service**: hosted on Firebase (prediction-app-2026.web.app/terms.html)
+- **Privacy Policy**: hosted on Firebase (prediction-app-2026.web.app/privacy.html)

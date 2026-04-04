@@ -93,7 +93,7 @@ export default function TabLayout() {
 
   const menuItems: { icon: IoniconsName; title: string; href: string }[] = [
     { icon: 'trophy-outline',     title: 'Tournaments',            href: '/(tabs)/tournaments' },
-    { icon: 'people-outline',     title: 'Friends & Challenges',   href: '/(tabs)/friends' },
+    { icon: 'git-compare-outline', title: 'Versus',                 href: '/(tabs)/friends' },
     { icon: 'receipt-outline',    title: 'Transaction History',    href: '/(tabs)/transactions' },
     { icon: 'ribbon-outline',     title: 'Achievements',           href: '/(tabs)/achievements' },
     { icon: 'bulb-outline',       title: 'Propose Market',         href: '/(tabs)/create-market' },

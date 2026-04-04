@@ -265,10 +265,18 @@ class ApiClient {
   }
 
   async updateUser(userId: string, data: any): Promise<ApiResponse<any>> {
-    return this.request(`/users/${userId}`, {
-      method: 'PATCH',
+    return this.request(`/users/${userId === 'me' ? '/users/me' : `/users/${userId}`}`, {
+      method: 'PUT',
       body: JSON.stringify(data),
     });
+  }
+
+  async updateProfile(data: { displayName?: string; avatarUrl?: string }): Promise<ApiResponse<any>> {
+    return this.request('/users/me', { method: 'PUT', body: JSON.stringify(data) });
+  }
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<ApiResponse<any>> {
+    return this.request('/users/me/password', { method: 'PUT', body: JSON.stringify({ currentPassword, newPassword }) });
   }
 
   // ============ AUTH ============
@@ -307,7 +315,7 @@ class ApiClient {
 
   // ============ TOURNAMENTS V2 (numeric prediction) ============
 
-  async getTournamentsV2(): Promise<ApiResponse<{ tournaments: any[]; myEntries: Record<string, any> }>> {
+  async getTournamentsV2(): Promise<ApiResponse<{ tournaments: any[]; recentResults: any[]; myEntries: Record<string, any> }>> {
     return this.request('/tournaments-v2');
   }
 
@@ -333,6 +341,20 @@ class ApiClient {
 
   async getRecentTournaments(): Promise<ApiResponse<any[]>> {
     return this.request('/tournaments-v2/recent');
+  }
+
+  // ============ VERSUS ============
+
+  async getVersusMatchups(): Promise<ApiResponse<{ matchups: any[]; recentResults: any[]; myPicks: Record<string, any> }>> {
+    return this.request('/versus');
+  }
+
+  async pickVersus(matchupId: string, pick: 'A' | 'B'): Promise<ApiResponse<any>> {
+    return this.request(`/versus/${matchupId}/pick`, { method: 'POST', body: JSON.stringify({ pick }) });
+  }
+
+  async getVersusDetail(matchupId: string): Promise<ApiResponse<any>> {
+    return this.request(`/versus/${matchupId}`);
   }
 
   // ============ SOCIAL / FRIENDS ============

@@ -159,10 +159,64 @@ Profile Tab → "Credit Store" link  OR  Hamburger → Credit Store
 
 ---
 
-## 6. Referral System
+## 6. Versus Flow (Comparative Prediction)
+
+### Picking a Side
 
 ```
-Friends Screen → Share referral code
+Versus Screen (hamburger menu)
+│
+├── See active matchups: "BTC vs ETH", "EUR vs GBP", etc.
+│   Each card shows: both assets, current odds, expiry time, market insight
+│   Dark "trading terminal" card design
+│
+├── Tap matchup → Matchup Detail
+│   ├── Asset A vs Asset B with current prices
+│   ├── Dynamic odds (calculated from 7d/30d momentum, sigmoid function, 15% house edge)
+│   ├── Auto-generated market insight from real price data
+│   ├── Pick Asset A or Asset B
+│   ├── Enter wager amount
+│   └── Tap "Place Pick"
+│
+├── Confirmation dialog
+│   └── Tap "Confirm" to place pick
+│
+├── Pick recorded (Firestore transaction)
+│   ├── Credits deducted (entry fee)
+│   ├── Pick stored in versus_picks
+│   └── Card shows "Picked" badge with chosen asset
+│
+└── Appears in Portfolio → Versus Picks section
+```
+
+### Resolution
+
+```
+Matchup expires → scheduler runs
+│
+├── Fetches current prices for both assets
+├── Compares % change of Asset A vs Asset B over the matchup period
+├── Determines winner (higher % change wins)
+│
+├── Payout logic:
+│   ├── Winner: entry fee × odds credited to balance
+│   ├── Loser: entry fee forfeited
+│   └── Tie (equal % change): full refund
+│
+├── Push notification sent:
+│   ├── Win: "BTC beat ETH! You won X credits"
+│   ├── Loss: "ETH outperformed BTC. Better luck next time"
+│   └── Tie: "Dead heat! Your X credits have been refunded"
+│
+└── Result visible in Portfolio → Versus Picks (win/loss/tie status)
+```
+
+---
+
+## 7. Referral System
+
+```
+Profile/Settings → Share referral code
 │
 ├── User shares code with friend (e.g. "A1B2C3D4")
 │
@@ -179,7 +233,7 @@ Friends Screen → Share referral code
 
 ---
 
-## 7. Account Deletion
+## 8. Account Deletion
 
 ```
 Settings → Danger Zone → "Delete Account"
@@ -199,7 +253,7 @@ Settings → Danger Zone → "Delete Account"
 
 ---
 
-## 8. Dark Mode
+## 9. Dark Mode
 
 ```
 Settings → Toggle "Dark Mode"
@@ -275,7 +329,18 @@ Settings → Toggle "Dark Mode"
 | GET | `/social/friends` | Friends list |
 | POST/DELETE | `/social/follow/:userId` | Follow/unfollow |
 | GET | `/social/referral` | Referral code + stats |
-| GET | `/social/challenges` | Challenges list |
+
+### Users (additions)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/users/me/change-password` | Change password (current + new, bcrypt verification) |
+
+### Versus
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/versus` | List active matchups |
+| GET | `/versus/:id` | Matchup detail with odds + insight |
+| POST | `/versus/:id/pick` | Place a pick on a matchup |
 
 ### Leaderboard
 | Method | Endpoint | Description |

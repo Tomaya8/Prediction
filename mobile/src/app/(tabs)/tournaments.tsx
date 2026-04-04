@@ -16,7 +16,7 @@ interface TournamentV2 {
   id: string;
   type: 'MONTHLY' | 'WEEKLY' | 'RAPID';
   category: string;
-  status: 'REGISTRATION' | 'LOCKED' | 'RESOLVED';
+  status: 'REGISTRATION' | 'LOCKED' | 'RESOLVED' | 'CANCELLED';
   question: string;
   unit: string;
   asset: string;
@@ -52,15 +52,40 @@ function getTypeConfig(type: string) {
   }
 }
 
-function getTimeRemaining(dateStr: string): string {
+function getTimeRemaining(dateStr: string): { text: string; color: string } {
   const diff = new Date(dateStr).getTime() - Date.now();
-  if (diff <= 0) return 'Ended';
+  if (diff <= 0) return { text: 'Ended', color: Colors.textSecondary };
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
   const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  if (days > 0) return `${days}d ${hours}h`;
-  if (hours > 0) return `${hours}h ${mins}m`;
-  return `${mins}m`;
+
+  let text: string;
+  if (days > 0) text = `${days}d ${hours}h`;
+  else if (hours > 0) text = `${hours}h ${mins}m`;
+  else text = `${mins}m`;
+
+  // Urgency colors (Fix 12)
+  let color: string;
+  if (diff > 24 * 60 * 60 * 1000) color = Colors.textSecondary;
+  else if (diff > 60 * 60 * 1000) color = '#F59E0B';
+  else color = '#EF4444';
+
+  return { text, color };
+}
+
+function getStatusDisplay(status: string, registrationCloses: string, expiresAt: string): { text: string; color: string } {
+  switch (status) {
+    case 'REGISTRATION':
+      return getTimeRemaining(registrationCloses);
+    case 'LOCKED':
+      return { text: 'Locked \u2014 tracking', color: '#F59E0B' };
+    case 'RESOLVED':
+      return { text: 'Results Ready', color: '#3B82F6' };
+    case 'CANCELLED':
+      return { text: 'Cancelled \u2014 Refunded', color: Colors.textMuted };
+    default:
+      return getTimeRemaining(expiresAt);
+  }
 }
 
 function getMaxMultiplier(type: string): string {
@@ -184,13 +209,20 @@ function TournamentEntryModal({
                 value={prediction}
                 onChangeText={setPrediction}
                 keyboardType="decimal-pad"
-                placeholder={tournament.currentValueAtCreation.toString()}
+                placeholder="Enter your prediction"
                 placeholderTextColor={Colors.textMuted}
               />
             </View>
 
-            {/* Distribution Histogram */}
-            {distribution.length > 0 && (
+            {/* Player count indicator (Fix 10) */}
+            {tournament.playerCount < 2 ? (
+              <Text style={styles.playerMinWarning}>Minimum 2 players needed to start</Text>
+            ) : (
+              <Text style={styles.playerMinOk}>{'\u2713'} Tournament will run</Text>
+            )}
+
+            {/* Distribution Histogram (Fix 11: only show when >= 10 players) */}
+            {distribution.length > 0 && tournament.playerCount >= 10 ? (
               <View style={styles.histogramSection}>
                 <Text style={styles.histLabel}>Where others are guessing</Text>
                 {distribution.map((bucket, i) => (
@@ -207,6 +239,8 @@ function TournamentEntryModal({
                   </View>
                 ))}
               </View>
+            ) : (
+              <Text style={styles.playerCountText}>{tournament.playerCount} players entered</Text>
             )}
 
             {/* Prize Breakdown */}
@@ -235,7 +269,7 @@ function TournamentEntryModal({
             {/* Registration deadline */}
             <Text style={styles.deadline}>
               {tournament.status === 'REGISTRATION'
-                ? `Registration closes in ${getTimeRemaining(tournament.registrationCloses)}`
+                ? `Registration closes in ${getTimeRemaining(tournament.registrationCloses).text}`
                 : 'Registration closed'}
             </Text>
 
@@ -343,7 +377,7 @@ function TrackerModal({
                   <View style={[styles.progressFill, { width: `${data.progress}%` }]} />
                 </View>
                 <Text style={styles.progressText}>
-                  Resolves in {getTimeRemaining(data.expiresAt)}
+                  Resolves in {getTimeRemaining(data.expiresAt).text}
                 </Text>
               </View>
             </View>
@@ -451,6 +485,7 @@ function ResultsModal({
 export default function TournamentsScreen() {
   const styles = useStyles(createStyles);
   const [tournaments, setTournaments] = useState<TournamentV2[]>([]);
+  const [recentResults, setRecentResults] = useState<TournamentV2[]>([]);
   const [myEntries, setMyEntries] = useState<Record<string, MyEntry>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -471,7 +506,8 @@ export default function TournamentsScreen() {
       isRefresh ? setRefreshing(true) : setLoading(true);
       const res = await apiClient.getTournamentsV2();
       if (res.success && res.data) {
-        setTournaments(res.data.tournaments);
+        setTournaments(res.data.tournaments.filter((t: any) => t.status !== 'RESOLVED' && t.status !== 'CANCELLED'));
+        setRecentResults(res.data.recentResults || []);
         setMyEntries(res.data.myEntries || {});
       }
     } catch {
@@ -485,16 +521,29 @@ export default function TournamentsScreen() {
   useEffect(() => { fetchTournaments(); }, [fetchTournaments]);
 
   const openTournament = async (t: TournamentV2) => {
+    // Fix 9: Handle each status appropriately
     if (t.status === 'RESOLVED') {
       setResultsTournamentId(t.id);
       setShowResults(true);
       return;
     }
 
-    if (t.status === 'LOCKED' && myEntries[t.id]) {
-      setTrackerTournamentId(t.id);
-      setTrackerQuestion(t.question);
-      setShowTracker(true);
+    if (t.status === 'CANCELLED') {
+      Alert.alert(
+        'Tournament Cancelled',
+        'This tournament has been cancelled. Your entry fee has been refunded to your account.'
+      );
+      return;
+    }
+
+    if (t.status === 'LOCKED') {
+      if (myEntries[t.id]) {
+        setTrackerTournamentId(t.id);
+        setTrackerQuestion(t.question);
+        setShowTracker(true);
+      } else {
+        Alert.alert('Registration Closed', 'Registration for this tournament has closed.');
+      }
       return;
     }
 
@@ -527,25 +576,54 @@ export default function TournamentsScreen() {
     const typeConfig = getTypeConfig(t.type);
     const entered = !!myEntries[t.id];
     const maxMult = getMaxMultiplier(t.type);
+    const statusDisplay = getStatusDisplay(t.status, t.registrationCloses, t.expiresAt);
+
+    // Fix 8: Color-coded card styles by status
+    const cardStatusStyle =
+      t.status === 'REGISTRATION' ? { borderLeftWidth: 3, borderLeftColor: Colors.primary } :
+      t.status === 'LOCKED' ? { borderLeftWidth: 3, borderLeftColor: '#F59E0B' } :
+      t.status === 'RESOLVED' ? { opacity: 0.7 } :
+      t.status === 'CANCELLED' ? { opacity: 0.7, backgroundColor: Colors.surface + '80' } :
+      {};
+
+    // Fix 12: urgency check for "Last chance!" badge
+    const regTimeRemaining = t.status === 'REGISTRATION'
+      ? new Date(t.registrationCloses).getTime() - Date.now()
+      : null;
+    const isLastChance = regTimeRemaining != null && regTimeRemaining > 0 && regTimeRemaining < 60 * 60 * 1000;
 
     return (
-      <TouchableOpacity key={t.id} style={styles.card} onPress={() => openTournament(t)} activeOpacity={0.7}>
+      <TouchableOpacity key={t.id} style={[styles.card, cardStatusStyle]} onPress={() => openTournament(t)} activeOpacity={0.7}>
         {/* Top row: type badge + status */}
         <View style={styles.cardTop}>
           <View style={[styles.cardTypeBadge, { backgroundColor: typeConfig.bgColor }]}>
             <Ionicons name={typeConfig.icon as any} size={12} color={typeConfig.color} />
             <Text style={[styles.cardTypeText, { color: typeConfig.color }]}>{typeConfig.label}</Text>
           </View>
-          {entered && (
-            <View style={styles.enteredBadge}>
-              <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
-              <Text style={styles.enteredText}>Entered</Text>
-            </View>
-          )}
+          <View style={styles.cardTopRight}>
+            {isLastChance && (
+              <View style={styles.lastChanceBadge}>
+                <Text style={styles.lastChanceText}>Last chance!</Text>
+              </View>
+            )}
+            {entered && (
+              <View style={styles.enteredBadge}>
+                <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
+                <Text style={styles.enteredText}>Entered</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Question */}
         <Text style={styles.cardQuestion} numberOfLines={2}>{t.question}</Text>
+
+        {/* Fix 7: Show user's prediction on entered cards */}
+        {entered && myEntries[t.id] && (
+          <Text style={styles.cardPrediction}>
+            Your prediction: {t.unit}{myEntries[t.id].prediction.toLocaleString()}
+          </Text>
+        )}
 
         {/* Stats row */}
         <View style={styles.cardStats}>
@@ -562,13 +640,11 @@ export default function TournamentsScreen() {
             <Text style={styles.cardStatLabel}>entry</Text>
           </View>
           <View style={styles.cardStat}>
-            <Text style={styles.cardStatValue}>
-              {t.status === 'REGISTRATION'
-                ? getTimeRemaining(t.registrationCloses)
-                : getTimeRemaining(t.expiresAt)}
+            <Text style={[styles.cardStatValue, { color: statusDisplay.color }]}>
+              {statusDisplay.text}
             </Text>
             <Text style={styles.cardStatLabel}>
-              {t.status === 'REGISTRATION' ? 'to enter' : 'left'}
+              {t.status === 'REGISTRATION' ? 'to enter' : 'status'}
             </Text>
           </View>
         </View>
@@ -584,6 +660,12 @@ export default function TournamentsScreen() {
           <View style={styles.cardAction}>
             <Text style={[styles.cardActionText, { color: Colors.warning }]}>Tap to track</Text>
             <Ionicons name="pulse-outline" size={16} color={Colors.warning} />
+          </View>
+        )}
+        {t.status === 'RESOLVED' && (
+          <View style={styles.cardAction}>
+            <Text style={[styles.cardActionText, { color: '#3B82F6' }]}>View results</Text>
+            <Ionicons name="podium-outline" size={16} color="#3B82F6" />
           </View>
         )}
       </TouchableOpacity>
@@ -647,6 +729,17 @@ export default function TournamentsScreen() {
           </>
         )}
 
+        {/* Recent Results */}
+        {recentResults.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="checkmark-circle" size={18} color={Colors.textSecondary} />
+              <Text style={styles.sectionTitle}>Recent Results</Text>
+            </View>
+            {recentResults.map(renderCard)}
+          </View>
+        )}
+
         {/* How it works */}
         <View style={styles.rulesCard}>
           <Text style={styles.rulesTitle}>How Tournaments Work</Text>
@@ -708,9 +801,13 @@ function createStyles() { return StyleSheet.create({
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
   cardTypeBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: Spacing.sm, paddingVertical: 3, borderRadius: Radius.sm },
   cardTypeText: { fontSize: FontSize.xs, fontWeight: '700' },
+  cardTopRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  lastChanceBadge: { backgroundColor: '#EF4444', paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: Radius.sm },
+  lastChanceText: { fontSize: FontSize.xs, fontWeight: '700', color: '#fff' },
   enteredBadge: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   enteredText: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: '600' },
   cardQuestion: { fontSize: FontSize.lg, fontWeight: '600', color: Colors.textPrimary, marginBottom: Spacing.md, lineHeight: 22 },
+  cardPrediction: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600', marginBottom: Spacing.sm },
   cardStats: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.border },
   cardStat: { alignItems: 'center' },
   cardStatValue: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.textPrimary },
@@ -763,6 +860,9 @@ function createEntryStyles() { return StyleSheet.create({
   prizeLabel: { fontSize: FontSize.md, color: Colors.textSecondary },
   prizeValue: { fontSize: FontSize.md, color: Colors.textPrimary, fontWeight: '600' },
   deadline: { textAlign: 'center', fontSize: FontSize.sm, color: Colors.warning, marginBottom: Spacing.md, fontWeight: '600' },
+  playerMinWarning: { fontSize: FontSize.sm, color: '#F59E0B', fontWeight: '600', marginBottom: Spacing.md, textAlign: 'center' },
+  playerMinOk: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600', marginBottom: Spacing.md, textAlign: 'center' },
+  playerCountText: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.lg, textAlign: 'center' },
   submitBtn: { backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: Spacing.lg, alignItems: 'center' },
   submitText: { color: '#fff', fontSize: FontSize.lg, fontWeight: '700' },
 }); }
@@ -793,8 +893,8 @@ function createTrackerStyles() { return StyleSheet.create({
 }); }
 
 function createResultsStyles() { return StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
-  container: { backgroundColor: Colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%', padding: Spacing.xl },
+  overlay: { flex: 1, backgroundColor: Colors.overlay },
+  container: { flex: 1, backgroundColor: Colors.background, marginTop: 60, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: Spacing.xl },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.lg },
   title: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.textPrimary },
   body: { flex: 1 },

@@ -37,6 +37,8 @@ export default function PortfolioScreen() {
   const styles = useStyles(createStyles);
   const router = useRouter();
   const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [versusPicks, setVersusPicks] = useState<any[]>([]);
+  const [tournamentEntries, setTournamentEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,13 +50,38 @@ export default function PortfolioScreen() {
       setLoading(false);
       return;
     }
-    const res = await apiClient.getPortfolio(user.id);
-    if (res.success && res.data) {
-      setHoldings(res.data as unknown as Holding[]);
-      setError(null);
-    } else {
-      setError(res.error ?? 'Failed to load portfolio');
+    // Fetch all positions in parallel
+    const [holdingsRes, versusRes, tournamentsRes] = await Promise.all([
+      apiClient.getPortfolio(user.id),
+      apiClient.getVersusMatchups(),
+      apiClient.getTournamentsV2(),
+    ]);
+    if (holdingsRes.success && holdingsRes.data) {
+      setHoldings(holdingsRes.data as unknown as Holding[]);
     }
+    // Extract active versus picks
+    if (versusRes.success && versusRes.data) {
+      const picks = versusRes.data.myPicks || {};
+      const matchups = [...(versusRes.data.matchups || []), ...(versusRes.data.recentResults || [])];
+      const activePicks = matchups
+        .filter((m: any) => picks[m.id])
+        .map((m: any) => ({
+          ...m,
+          myPick: picks[m.id].pick,
+          myAmount: picks[m.id].amount || m.entryFee,
+        }));
+      setVersusPicks(activePicks);
+    }
+    // Extract tournament entries
+    if (tournamentsRes.success && tournamentsRes.data) {
+      const entries = tournamentsRes.data.myEntries || {};
+      const tournaments = tournamentsRes.data.tournaments || [];
+      const myTournaments = tournaments
+        .filter((t: any) => entries[t.id])
+        .map((t: any) => ({ ...t, myPrediction: entries[t.id].prediction, myRank: entries[t.id].rank, myPayout: entries[t.id].payout }));
+      setTournamentEntries(myTournaments);
+    }
+    setError(null);
     setLoading(false);
   }, []);
 
@@ -198,6 +225,98 @@ export default function PortfolioScreen() {
                     <Text style={styles.winningsText}>
                       +{Math.floor(item.quantity)} credits
                     </Text>
+                  )}
+                </View>
+              </View>
+            ))}
+          </>
+        )}
+
+        {/* Versus Picks */}
+        {versusPicks.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Versus Picks</Text>
+            {versusPicks.map((m: any) => {
+              const won = m.status === 'RESOLVED' && m.winner === m.myPick;
+              const lost = m.status === 'RESOLVED' && m.winner !== m.myPick && m.winner !== 'TIE';
+              const pickedAsset = m.myPick === 'A' ? m.assetA : m.assetB;
+              const odds = m.myPick === 'A' ? m.oddsA : m.oddsB;
+              return (
+                <View key={m.id} style={[styles.holdingCard, { borderLeftWidth: 3, borderLeftColor: pickedAsset.color }]}>
+                  <View style={styles.holdingHeader}>
+                    <Text style={styles.holdingMarket}>{m.assetA.symbol} vs {m.assetB.symbol}</Text>
+                    {m.status === 'RESOLVED' ? (
+                      <View style={[styles.resultBadge, won ? styles.wonBadge : lost ? styles.lostBadge : {}]}>
+                        <Text style={styles.resultText}>{won ? 'Won' : lost ? 'Lost' : 'Tie'}</Text>
+                      </View>
+                    ) : (
+                      <Text style={{ fontSize: FontSize.xs, color: Colors.textSecondary }}>
+                        {m.status === 'OPEN' ? 'Active' : m.status}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={styles.holdingDetails}>
+                    <View style={styles.holdingRow}>
+                      <Text style={styles.holdingLabel}>Your pick</Text>
+                      <Text style={[styles.holdingValue, { color: pickedAsset.color }]}>{pickedAsset.symbol} ({odds}x)</Text>
+                    </View>
+                    <View style={styles.holdingRow}>
+                      <Text style={styles.holdingLabel}>Entry</Text>
+                      <Text style={styles.holdingValue}>{m.myAmount} credits</Text>
+                    </View>
+                    {m.status === 'RESOLVED' && (
+                      <View style={[styles.holdingRow, styles.pnlRow]}>
+                        <Text style={styles.holdingLabel}>Result</Text>
+                        <Text style={[styles.holdingValue, won ? styles.positive : lost ? styles.negative : {}]}>
+                          {won ? `+${Math.round(m.myAmount * odds)} credits` : lost ? `-${m.myAmount} credits` : 'Refunded'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </>
+        )}
+
+        {/* Tournament Entries */}
+        {tournamentEntries.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Tournament Entries</Text>
+            {tournamentEntries.map((t: any) => (
+              <View key={t.id} style={[styles.holdingCard, { borderLeftWidth: 3, borderLeftColor: t.type === 'RAPID' ? '#F59E0B' : t.type === 'WEEKLY' ? '#3B82F6' : '#8B5CF6' }]}>
+                <View style={styles.holdingHeader}>
+                  <Text style={styles.holdingMarket} numberOfLines={2}>{t.question}</Text>
+                  <Text style={{ fontSize: FontSize.xs, color: Colors.textSecondary, textTransform: 'uppercase' }}>{t.type}</Text>
+                </View>
+                <View style={styles.holdingDetails}>
+                  <View style={styles.holdingRow}>
+                    <Text style={styles.holdingLabel}>Your prediction</Text>
+                    <Text style={[styles.holdingValue, { color: Colors.primary }]}>{t.unit}{t.myPrediction?.toLocaleString()}</Text>
+                  </View>
+                  <View style={styles.holdingRow}>
+                    <Text style={styles.holdingLabel}>Entry fee</Text>
+                    <Text style={styles.holdingValue}>{t.entryFee} credits</Text>
+                  </View>
+                  <View style={styles.holdingRow}>
+                    <Text style={styles.holdingLabel}>Players</Text>
+                    <Text style={styles.holdingValue}>{t.playerCount}</Text>
+                  </View>
+                  {t.status === 'RESOLVED' && t.myRank && (
+                    <View style={[styles.holdingRow, styles.pnlRow]}>
+                      <Text style={styles.holdingLabel}>Result</Text>
+                      <Text style={[styles.holdingValue, t.myPayout > 0 ? styles.positive : styles.negative]}>
+                        #{t.myRank} — {t.myPayout > 0 ? `+${t.myPayout} credits` : 'No prize'}
+                      </Text>
+                    </View>
+                  )}
+                  {t.status !== 'RESOLVED' && (
+                    <View style={styles.holdingRow}>
+                      <Text style={styles.holdingLabel}>Status</Text>
+                      <Text style={[styles.holdingValue, { color: t.status === 'REGISTRATION' ? Colors.primary : '#F59E0B' }]}>
+                        {t.status === 'REGISTRATION' ? 'Open' : 'Locked'}
+                      </Text>
+                    </View>
                   )}
                 </View>
               </View>
