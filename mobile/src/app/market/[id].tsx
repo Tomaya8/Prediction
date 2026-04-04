@@ -37,6 +37,7 @@ export default function MarketDetailScreen() {
   const [previewShares, setPreviewShares] = useState<number | null>(null);
   const [previewActualCost, setPreviewActualCost] = useState<number | null>(null);
   const [sellPreviewRevenue, setSellPreviewRevenue] = useState<number | null>(null);
+  const [showFullDescription, setShowFullDescription] = useState(false);
   const [executingTrade, setExecutingTrade] = useState(false);
   const [userHoldings, setUserHoldings] = useState<Record<string, number>>({});
 
@@ -308,6 +309,8 @@ export default function MarketDetailScreen() {
     }
   };
 
+  const hasLongDescription = (market.description || '').length > 100;
+
   // Show loading state
   if (loading && !refreshing) {
     return (
@@ -329,9 +332,6 @@ export default function MarketDetailScreen() {
       </View>
     );
   }
-
-  const [showFullDescription, setShowFullDescription] = useState(false);
-  const hasLongDescription = (market.description || '').length > 100;
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
